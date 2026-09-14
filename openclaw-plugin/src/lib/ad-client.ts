@@ -5,6 +5,8 @@
  * hard 2s timeout — the agent must never stall or break because of ads.
  */
 
+import { deviceId } from "./config.js";
+
 export interface Ad {
   ad_id?: string;
   id?: string;
@@ -14,6 +16,7 @@ export interface Ad {
   cta_url?: string;
   earn_amount?: number;
   impression_token?: string;
+  click_token?: string;
 }
 
 export interface AdRequest {
@@ -49,6 +52,7 @@ export async function fetchAd(req: AdRequest): Promise<Ad | null> {
     agent: "openclaw",
     context: req.context.slice(0, 100) || "general",
     surface: req.surface,
+    device_id: deviceId(),
   });
   if (!resp || !resp.ok) return null;
   try {

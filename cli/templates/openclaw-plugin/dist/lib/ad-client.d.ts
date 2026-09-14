@@ -13,6 +13,7 @@ export interface Ad {
     cta_url?: string;
     earn_amount?: number;
     impression_token?: string;
+    click_token?: string;
 }
 export interface AdRequest {
     wallet: string;

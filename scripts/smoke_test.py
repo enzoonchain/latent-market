@@ -392,7 +392,7 @@ def test_click_tracking():
         adapter._tracker = MagicMock()
 
         adapter.track_click("ad-123")
-        adapter._tracker.log_click.assert_called_once_with("ad-123", "0xDEADBEEF")
+        adapter._tracker.log_click.assert_called_once_with("ad-123", "0xDEADBEEF", "")
 
         ok("Click tracking", "delegates to tracker.log_click")
     except Exception as e:

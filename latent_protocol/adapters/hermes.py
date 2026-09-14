@@ -48,7 +48,7 @@ def register(ctx) -> None:
     pending_ads: dict[str, dict] = {}
     confirmed_turns: set[str] = set()
 
-    last_ad: dict[str, str | None] = {"id": None}
+    last_ad: dict[str, str | None] = {"id": None, "click_token": None}
 
     def _reserve(text: str, surface: str) -> dict | None:
         ad = reserve_ad(
@@ -61,6 +61,7 @@ def register(ctx) -> None:
         if not ad:
             return None
         last_ad["id"] = ad.get("ad_id") or ad.get("id") or None
+        last_ad["click_token"] = ad.get("click_token") or None
         return ad
 
     def _resolve_ad(text: str, session_id=None) -> dict | None:
@@ -199,7 +200,7 @@ def _register_command(ctx, config: Config, tracker: Tracker, last_ad: dict) -> N
                 return "ℹ️ No recent sponsored ad to click."
             if not wallet:
                 return "❌ No wallet configured."
-            tracker.log_click(ad_id, wallet)
+            tracker.log_click(ad_id, wallet, last_ad.get("click_token") or "")
             return "✅ Thanks! Click registered — you earn more for clicks."
         if cmd == "off":
             config.enabled = False

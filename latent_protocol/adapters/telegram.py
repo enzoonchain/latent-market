@@ -45,6 +45,10 @@ from ..config import Config
 from ..footer import FrequencyCounter, format_footer
 from ..tracker import Tracker
 
+# Bounded ad_id -> click_token cache, capped so a long-running bot process
+# doesn't grow this unbounded.
+_MAX_TRACKED_ADS = 500
+
 
 class TelegramAdAdapter:
     """Append a Telegram-formatted sponsored footer to bot responses.
@@ -63,6 +67,19 @@ class TelegramAdAdapter:
         self._counter = FrequencyCounter(self._cfg.frequency)
         # Per-user counters keyed by user_id
         self._user_counters: dict[str, FrequencyCounter] = {}
+        # ad_id -> click_token, so a later track_click(ad_id) call can prove
+        # to the server this was really our ad (S6 hardening).
+        self._click_tokens: dict[str, str] = {}
+
+    def _remember_click_token(self, ad: dict) -> None:
+        ad_id = ad.get("ad_id") or ad.get("id") or ""
+        token = ad.get("click_token") or ""
+        if not ad_id or not token:
+            return
+        if ad_id not in self._click_tokens and len(self._click_tokens) >= _MAX_TRACKED_ADS:
+            oldest = next(iter(self._click_tokens))
+            del self._click_tokens[oldest]
+        self._click_tokens[ad_id] = token
 
     def _counter_for(self, user_id: str | None) -> FrequencyCounter:
         if not self._per_user or user_id is None:
@@ -102,6 +119,7 @@ class TelegramAdAdapter:
         if not ad:
             return text
 
+        self._remember_click_token(ad)
         out = text + format_footer(ad, style="telegram")
         # Commit point: caller sends this string to Telegram.
         confirm_if_displayed(self._tracker, ad, self._cfg.wallet, out)
@@ -109,4 +127,4 @@ class TelegramAdAdapter:
 
     def track_click(self, ad_id: str) -> None:
         """Call this when the user taps the CTA button (if you track inline buttons)."""
-        self._tracker.log_click(ad_id, self._cfg.wallet)
+        self._tracker.log_click(ad_id, self._cfg.wallet, self._click_tokens.get(ad_id, ""))

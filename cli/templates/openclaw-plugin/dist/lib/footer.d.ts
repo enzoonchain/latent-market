@@ -10,6 +10,11 @@ export declare function isSafeUrl(url: string): boolean;
  * Build the click-tracking redirect for an ad. The displayed CTA points here;
  * the server logs the click and 302s to the advertiser. Makes clicks
  * attributable in every channel where the link is clickable (clicks earn 50x).
+ *
+ * `t` is the signed click token from /ad/request — without it the server
+ * won't credit the click (S6 hardening: otherwise anyone who knows an ad_id +
+ * wallet, both public via /ad/leaderboard and /earnings, could forge a click
+ * for a wallet that never clicked anything).
  */
 export declare function clickUrl(server: string, ad: Ad, wallet: string): string;
 /** Single-line sponsor string for thinking-state `prependContext`. */

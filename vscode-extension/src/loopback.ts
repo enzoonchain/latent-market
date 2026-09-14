@@ -13,7 +13,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { loadConfig } from "./config.js";
+import { deviceId, loadConfig } from "./config.js";
 import { recordServerResult, shouldServe } from "./health.js";
 
 export interface LoopbackIdentity {
@@ -122,6 +122,7 @@ export class Loopback {
             surface: "spinner",
             tags: category ? [category] : [],
             session_id: this.token,
+            device_id: deviceId(),
           }),
           signal: AbortSignal.timeout(3000),
         });

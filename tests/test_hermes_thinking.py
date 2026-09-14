@@ -13,6 +13,7 @@ FAKE_AD = {
     "cta_url": "https://acme.io",
     "earn_amount": 0.0025,
     "impression_token": "tok-abc",
+    "click_token": "click-tok-abc",
 }
 
 
@@ -129,7 +130,7 @@ def test_ads_click_registers_last_ad():
     ctx.hooks["pre_llm_call"](session_id="s1", user_message="hi")
     msg = ctx.commands["ads"]("click")
     assert "registered" in msg.lower()
-    tracker.log_click.assert_called_once_with("ad-1", "0xDEADBEEF")
+    tracker.log_click.assert_called_once_with("ad-1", "0xDEADBEEF", "click-tok-abc")
 
 
 def test_ads_click_without_recent_ad():
