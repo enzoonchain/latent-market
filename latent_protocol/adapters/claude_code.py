@@ -33,6 +33,7 @@ from pathlib import Path
 
 from ..ad_client import AdClient
 from ..config import Config
+from ..sanitize import AD_LIMITS, sanitize_ad_text
 from ..tracker import Tracker
 
 _CONFIG_DIR = Path.home() / ".latent-protocol"
@@ -70,9 +71,15 @@ def _osc8_link(text: str, url: str) -> str:
 
 
 def format_statusline(ad: dict) -> str:
-    """Single-line sponsored status line (ANSI). No trailing newline."""
-    body = ad.get("body", "") or ad.get("title", "")
-    cta_text = ad.get("cta_text", "Learn more")
+    """Single-line sponsored status line (ANSI). No trailing newline.
+
+    ``body``/``title``/``cta_text`` are advertiser-controlled and are about to
+    be written straight into the user's real terminal — sanitize before any
+    ANSI is built around them (raw ESC/CSI/OSC or bidi-override bytes here
+    would act on the terminal itself, not just render as text).
+    """
+    body = sanitize_ad_text(ad.get("body") or ad.get("title"), AD_LIMITS["body"]) or "Sponsored"
+    cta_text = sanitize_ad_text(ad.get("cta_text"), AD_LIMITS["cta_text"]) or "Learn more"
     cta_url = ad.get("cta_url", "")
     earn = ad.get("earn_amount", 0)
     cta = _osc8_link(f"{cta_text} →", cta_url)

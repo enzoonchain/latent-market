@@ -31,6 +31,22 @@ def test_reserve_ad_does_not_bill():
     client.get_ad.assert_called_once()
 
 
+def test_reserve_ad_classifies_context_locally_never_forwards_raw_text():
+    """C4 regression: several adapters pass the raw user message / assistant
+    response as `context` (see e.g. adapters/telegram.py's docstring). Only a
+    classified category slug may reach the ad server — never that raw text."""
+    client = MagicMock()
+    client.get_ad.return_value = {"ad_id": "a1"}
+    secret_message = "my api key is sk-live-abc123, help me write a fastapi jwt auth endpoint"
+
+    reserve_ad(client, wallet="0xABC", context=secret_message, agent="hermes", surface="thinking_state")
+
+    sent_context = client.get_ad.call_args.kwargs["context"]
+    assert sent_context != secret_message
+    assert secret_message not in sent_context
+    assert sent_context == "backend"
+
+
 def test_confirm_display_posts_impression():
     tracker = MagicMock()
     ad = {"ad_id": "a1", "impression_token": "tok"}
