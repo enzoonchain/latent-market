@@ -43,4 +43,22 @@ describe("isSafeUrl", () => {
     expect(isSafeUrl("https://acme.example/\x1b")).toBe(false);
     expect(isSafeUrl("https://acme.example")).toBe(true);
   });
+
+  it("rejects the C1 control range, not just C0/DEL", () => {
+    expect(isSafeUrl("https://acme.example/\x9b31mFAKE")).toBe(false);
+  });
+
+  it("rejects an embedded userinfo homograph", () => {
+    expect(isSafeUrl("https://trusted-brand.example@evil.com/x")).toBe(false);
+  });
+});
+
+describe("thinkingLine markdown-link injection", () => {
+  it("neutralizes [text](url) brackets so ad copy can't inject a second link", () => {
+    const ad: Ad = { ad_id: "1", body: "Buy now [Click here](https://evil.example/phish)" };
+    const line = thinkingLine(ad, "https://acme.example");
+    expect(line).not.toContain("[");
+    expect(line).not.toContain("]");
+    expect(line).toContain("Click here");
+  });
 });

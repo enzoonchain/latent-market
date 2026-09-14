@@ -22,7 +22,18 @@ mkdir -p "$DEST"
 # Copy runtime bits only (no node_modules)
 cp -R "$SRC/dist" "$DEST/dist"
 cp "$SRC/openclaw.plugin.json" "$DEST/"
-cp "$SRC/package.json" "$DEST/"
+# Strip devDependencies + dev-only scripts (test/typecheck/build) — this
+# package.json ships to every end user via `npx latent-protocol init`, which
+# never runs `npm install --include=dev` there; a bare `npm install && npm
+# test` in the installed plugin used to immediately fail with "No test
+# files found" since test/ and tsconfig*.json aren't shipped at all.
+node -e '
+  const fs = require("fs");
+  const pkg = JSON.parse(fs.readFileSync("'"$SRC"'/package.json", "utf8"));
+  delete pkg.devDependencies;
+  delete pkg.scripts;
+  fs.writeFileSync("'"$DEST"'/package.json", JSON.stringify(pkg, null, 2) + "\n");
+'
 if [[ -d "$SRC/skills" ]]; then
   cp -R "$SRC/skills" "$DEST/skills"
 fi

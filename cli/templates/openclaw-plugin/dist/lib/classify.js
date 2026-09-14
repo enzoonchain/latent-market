@@ -48,13 +48,19 @@ const KEYWORDS = {
         "warehouse", "dataframe", "parquet", "pipeline", "analytics",
     ],
 };
+// Compiled once at module load (~130 keywords) rather than per classifyMessage
+// call — this runs on every turn from thinking-inject.ts/message-footer.ts.
+const WORD_PATTERNS = Object.fromEntries(Object.entries(KEYWORDS).map(([cat, words]) => [
+    cat,
+    words.map((w) => new RegExp(`(?:^|[^a-z0-9])${w}(?=[^a-z0-9]|$)`, "g")),
+]));
 function scoreText(haystack) {
     const scores = new Map();
     const lower = haystack.toLowerCase();
-    for (const [cat, words] of Object.entries(KEYWORDS)) {
+    for (const [cat, patterns] of Object.entries(WORD_PATTERNS)) {
         let hits = 0;
-        for (const w of words) {
-            const re = new RegExp(`(^|[^a-z0-9])${w}([^a-z0-9]|$)`, "g");
+        for (const re of patterns) {
+            re.lastIndex = 0; // stateful (global) regex — reset between calls
             const m = lower.match(re);
             if (m)
                 hits += m.length;

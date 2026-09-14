@@ -61,16 +61,25 @@ const KEYWORDS: Record<Exclude<Category, "general">, string[]> = {
   ],
 };
 
+// Compiled once at module load (~130 keywords) rather than per classifyMessage
+// call — this runs on every turn from thinking-inject.ts/message-footer.ts.
+const WORD_PATTERNS: Record<Exclude<Category, "general">, RegExp[]> = Object.fromEntries(
+  Object.entries(KEYWORDS).map(([cat, words]) => [
+    cat,
+    words.map((w) => new RegExp(`(?:^|[^a-z0-9])${w}(?=[^a-z0-9]|$)`, "g")),
+  ]),
+) as Record<Exclude<Category, "general">, RegExp[]>;
+
 function scoreText(haystack: string): Map<Category, number> {
   const scores = new Map<Category, number>();
   const lower = haystack.toLowerCase();
-  for (const [cat, words] of Object.entries(KEYWORDS) as [
+  for (const [cat, patterns] of Object.entries(WORD_PATTERNS) as [
     Exclude<Category, "general">,
-    string[],
+    RegExp[],
   ][]) {
     let hits = 0;
-    for (const w of words) {
-      const re = new RegExp(`(^|[^a-z0-9])${w}([^a-z0-9]|$)`, "g");
+    for (const re of patterns) {
+      re.lastIndex = 0; // stateful (global) regex — reset between calls
       const m = lower.match(re);
       if (m) hits += m.length;
     }

@@ -92,7 +92,7 @@ function scoreText(haystack: string): Map<Category, number> {
     let hits = 0;
     for (const w of words) {
       // Word-ish boundary so "ml" doesn't match "html".
-      const re = new RegExp(`(^|[^a-z0-9])${w}([^a-z0-9]|$)`, "g");
+      const re = new RegExp(`(?:^|[^a-z0-9])${w}(?=[^a-z0-9]|$)`, "g");
       const m = lower.match(re);
       if (m) hits += m.length;
     }

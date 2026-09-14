@@ -10,11 +10,22 @@ import { sanitizeAdText, AD_LIMITS } from "./sanitize.js";
  */
 export function isSafeUrl(url: string): boolean {
   if (typeof url !== "string" || !url.startsWith("https://")) return false;
-  // Reject control chars (incl. ESC 0x1b / BEL 0x07, all < 0x20) and DEL 0x7f.
-  return [...url].every((c) => {
+  // Reject control chars — C0 (incl. ESC 0x1b / BEL 0x07, all < 0x20), DEL
+  // 0x7f, and C1 (0x80-0x9f, e.g. the single-byte CSI introducer 0x9b some
+  // terminals treat like ESC-[).
+  const hasControlChar = [...url].some((c) => {
     const code = c.charCodeAt(0);
-    return code >= 0x20 && code !== 0x7f;
+    return code < 0x20 || (code >= 0x7f && code <= 0x9f);
   });
+  if (hasControlChar) return false;
+  // Reject embedded userinfo (`user@host`) — a phishing URL can otherwise
+  // read as a trusted domain up to the `@` while actually pointing elsewhere.
+  try {
+    const parsed = new URL(url);
+    return parsed.username === "" && parsed.password === "";
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -22,7 +22,22 @@ describe("classifyMessage", () => {
   it("never needs the raw message to leave the caller — output is always one of the fixed slugs", () => {
     const secrets = "sk-live-abc123 my ssn is 000-00-0000, prompt: react app with a fastapi backend";
     const category = classifyMessage(secrets);
-    expect(category).not.toContain(secrets);
-    expect(["frontend-ui", "backend", "general"]).toContain(category);
+    // The real guarantee: the output is always one of the ~9 fixed slugs,
+    // never a derivative of the input (a substring/prefix/hash of it would
+    // still technically satisfy `not.toContain(secrets)` without meeting
+    // the actual privacy invariant, so assert membership in the fixed set
+    // directly instead).
+    const ALL_SLUGS = [
+      "frontend-ui", "backend", "databases", "devops-infra",
+      "ai-ml", "web3-crypto", "mobile", "data-eng", "general",
+    ];
+    expect(ALL_SLUGS).toContain(category);
+    expect(category.length).toBeLessThan(20);
+  });
+
+  it("repeated occurrences of the same keyword all count (lookahead boundary regression)", () => {
+    // A consumed trailing boundary would eat the single space between two
+    // adjacent occurrences of the same word, undercounting hits.
+    expect(classifyMessage("docker docker docker deploy")).toBe("devops-infra");
   });
 });
