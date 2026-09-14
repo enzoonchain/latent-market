@@ -71,7 +71,11 @@ _WORD_RE_CACHE: dict[str, re.Pattern] = {}
 def _hits(lower_text: str, word: str) -> int:
     pattern = _WORD_RE_CACHE.get(word)
     if pattern is None:
-        pattern = re.compile(rf"(^|[^a-z0-9]){re.escape(word)}([^a-z0-9]|$)")
+        # Trailing boundary is a lookahead (not consumed) so two occurrences
+        # of the same word separated by a single boundary char (e.g. "docker
+        # docker deploy") both count — a consumed boundary would eat the
+        # space the second match needs as its own leading boundary.
+        pattern = re.compile(rf"(?:^|[^a-z0-9]){re.escape(word)}(?=[^a-z0-9]|$)")
         _WORD_RE_CACHE[word] = pattern
     return len(pattern.findall(lower_text))
 

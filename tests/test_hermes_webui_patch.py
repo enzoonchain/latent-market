@@ -60,3 +60,35 @@ def test_find_static_respects_env(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("HERMES_WEBUI_ROOT", raising=False)
     monkeypatch.delenv("HERMES_WEBUI_DIR", raising=False)
     assert hw._find_static() == static.resolve()
+
+
+# ── Injected JS: escaping + local classification (no JS runtime here, so this
+# asserts on the source text itself — a browser/e2e test would be the real
+# regression guard, but this at least catches the raw-interpolation pattern
+# from silently coming back). ──
+
+
+def test_injected_js_escapes_ad_text_before_innerhtml():
+    js = hw._AD_JS
+    assert "_esc(ad.body" in js
+    assert "_esc(ad.cta_text" in js
+    assert "_esc(parseFloat(ad.earn_amount)" in js
+    # the old raw-concatenation pattern must be gone
+    assert "+ (ad.body || ad.title || '') +" not in js
+
+
+def test_injected_js_gates_cta_url_through_a_safety_check_before_href():
+    js = hw._AD_JS
+    assert "_isSafeUrl(ad.cta_url)" in js
+    assert '\'<a href="\' + _esc(ad.cta_url)' in js
+    assert "'<a href=\"' + ad.cta_url +" not in js
+
+
+def test_injected_js_classifies_context_locally_instead_of_sending_raw_text():
+    js = hw._AD_JS
+    assert "context: _classify(ctx)" in js
+    assert "'thinking').slice(0, 100)" not in js
+    # the classifier must exist and cover the same category slugs as
+    # latent_protocol/classify.py
+    for slug in ("frontend-ui", "backend", "databases", "devops-infra", "ai-ml", "web3-crypto"):
+        assert f"'{slug}'" in js

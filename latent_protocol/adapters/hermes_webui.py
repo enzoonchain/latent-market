@@ -59,11 +59,44 @@ _AD_JS = r"""(function () {
       .catch(function () { return null; });
   }
 
+  // Classify locally — mirrors latent_protocol/classify.py's category slugs
+  // and keyword table. Only the resulting slug is ever sent as `context`;
+  // the raw chat text this reads from the DOM (see _ctx below) never leaves
+  // the browser. This is the same privacy invariant every other adapter in
+  // this package already keeps.
+  var _KEYWORDS = {
+    'frontend-ui': ['react', 'vue', 'svelte', 'angular', 'next', 'nuxt', 'tailwind', 'css', 'component', 'frontend', 'ui', 'ux', 'webpack', 'vite', 'dom', 'jsx', 'tsx'],
+    'backend': ['api', 'server', 'express', 'fastapi', 'flask', 'django', 'rails', 'spring', 'endpoint', 'rest', 'graphql', 'grpc', 'middleware', 'auth', 'jwt', 'route'],
+    'databases': ['sql', 'postgres', 'postgresql', 'mysql', 'sqlite', 'mongodb', 'mongo', 'redis', 'prisma', 'query', 'schema', 'migration', 'index', 'orm', 'database'],
+    'devops-infra': ['docker', 'kubernetes', 'k8s', 'terraform', 'ansible', 'ci', 'cd', 'pipeline', 'deploy', 'nginx', 'aws', 'gcp', 'azure', 'helm', 'infra', 'devops', 'compose'],
+    'ai-ml': ['llm', 'gpt', 'openai', 'anthropic', 'claude', 'embedding', 'vector', 'rag', 'pytorch', 'tensorflow', 'model', 'training', 'inference', 'prompt', 'agent', 'ml'],
+    'web3-crypto': ['solidity', 'ethereum', 'evm', 'wallet', 'web3', 'onchain', 'contract', 'erc20', 'erc721', 'base', 'usdc', 'x402', 'defi', 'token', 'crypto', 'blockchain'],
+    'mobile': ['swift', 'swiftui', 'kotlin', 'android', 'ios', 'flutter', 'dart', 'react-native', 'expo', 'xcode', 'mobile'],
+    'data-eng': ['pandas', 'spark', 'airflow', 'etl', 'dbt', 'kafka', 'snowflake', 'bigquery', 'warehouse', 'dataframe', 'parquet', 'pipeline', 'analytics']
+  };
+
+  function _classify(text) {
+    var lower = String(text || '').toLowerCase();
+    var best = 'general', bestScore = 0;
+    for (var cat in _KEYWORDS) {
+      var words = _KEYWORDS[cat];
+      var score = 0;
+      for (var i = 0; i < words.length; i++) {
+        var w = words[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var re = new RegExp('(?:^|[^a-z0-9])' + w + '(?=[^a-z0-9]|$)', 'g');
+        var m = lower.match(re);
+        if (m) score += m.length;
+      }
+      if (score > bestScore) { best = cat; bestScore = score; }
+    }
+    return best;
+  }
+
   function _fetchAd(ctx) {
     return _post('/ad/request', {
       user_wallet: WALLET,
       agent: 'hermes',
-      context: (ctx || 'thinking').slice(0, 100),
+      context: _classify(ctx),
       surface: 'webui_thinking',
       tags: []
     });
@@ -111,19 +144,41 @@ _AD_JS = r"""(function () {
     return null;
   }
 
+  // ad.body/title/cta_text/cta_url are advertiser-controlled and were being
+  // concatenated straight into innerHTML with no escaping at all — a
+  // <script>/onerror= payload in an ad ran in the user's own browser
+  // session. _esc() is a standard textContent-based HTML escape; cta_url is
+  // additionally gated to plain https with no embedded control chars (same
+  // shape as sanitize.py's is_safe_https_url) before it's ever allowed to
+  // become a clickable href.
+  function _esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  function _isSafeUrl(u) {
+    if (typeof u !== 'string' || u.slice(0, 8) !== 'https://') return false;
+    for (var i = 0; i < u.length; i++) {
+      var c = u.charCodeAt(i);
+      if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) return false;
+    }
+    return true;
+  }
+
   function _adHtml(ad, persistent) {
     var earn = ad.earn_amount
-      ? ' · <span style="color:#34d399">+$' + parseFloat(ad.earn_amount).toFixed(4) + ' USDC</span>'
+      ? ' · <span style="color:#34d399">+$' + _esc(parseFloat(ad.earn_amount).toFixed(4)) + ' USDC</span>'
       : '';
-    var cta = ad.cta_url
-      ? '<a href="' + ad.cta_url + '" target="_blank" rel="noopener noreferrer" '
+    var cta = (ad.cta_url && _isSafeUrl(ad.cta_url))
+      ? '<a href="' + _esc(ad.cta_url) + '" target="_blank" rel="noopener noreferrer" '
         + 'style="color:#60a5fa;text-decoration:none;white-space:nowrap">'
-        + (ad.cta_text || 'Learn more') + ' →</a>'
+        + _esc(ad.cta_text || 'Learn more') + ' →</a>'
       : '';
     var label = persistent ? '💰 Sponsored' : 'Sponsored';
     return '<span style="color:#f59e0b;font-size:10px;letter-spacing:.06em;'
       + 'text-transform:uppercase;flex-shrink:0">' + label + '</span>'
-      + '<span style="flex:1">' + (ad.body || ad.title || '') + '</span>'
+      + '<span style="flex:1">' + _esc(ad.body || ad.title || '') + '</span>'
       + cta + earn;
   }
 

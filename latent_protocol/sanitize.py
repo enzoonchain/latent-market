@@ -13,6 +13,7 @@ equivalent, so no adapter here sanitized ad copy at all before this.
 """
 
 import re
+from urllib.parse import urlsplit
 
 _ESC_SEQ = re.compile(
     r"\x1b\][\s\S]*?(?:\x07|\x1b\\|$)"  # OSC   ESC ] ... (BEL | ST)
@@ -29,6 +30,15 @@ _BIDI = re.compile(r"[‪-‮⁦-⁩‎‏؜]")
 
 _WHITESPACE = re.compile(r"\s+")
 
+# `format_footer`'s telegram/markdown styles render this text inside a
+# markdown-parsed message. `[`/`]` are what forms a `[text](url)` link — an
+# advertiser body/cta_text containing its own bracket pair could inject a
+# second, unvalidated link that never went through `is_safe_https_url`,
+# bypassing the cta_url gate entirely. Swap for visually-similar fullwidth
+# brackets (not markdown-active) rather than stripping, so the text still
+# reads naturally.
+_MD_LINK_BRACKETS = str.maketrans({"[": "［", "]": "］"})
+
 
 def sanitize_ad_text(text: str | None, max_len: int = 140) -> str:
     """Clean advertiser text for a display sink.
@@ -41,6 +51,7 @@ def sanitize_ad_text(text: str | None, max_len: int = 140) -> str:
     s = _ESC_SEQ.sub("", s)
     s = _CONTROL.sub(" ", s)
     s = _BIDI.sub("", s)
+    s = s.translate(_MD_LINK_BRACKETS)
     s = _WHITESPACE.sub(" ", s).strip()
     if max_len > 0 and len(s) > max_len:
         s = s[: max(0, max_len - 1)].rstrip() + "…"
@@ -52,11 +63,19 @@ def is_safe_https_url(url: str | None) -> bool:
 
     An ad's ``cta_url`` is third-party data; emitting a ``javascript:`` /
     ``data:`` / ``file:`` scheme, or one with an embedded control character
-    that could break out of a markdown link or a terminal escape, is unsafe.
+    (C0 *or* C1 — the same range `sanitize_ad_text`'s `_CONTROL` rejects for
+    ad body text, e.g. the single-byte CSI introducer 0x9B) that could break
+    out of a markdown link or a terminal escape, is unsafe. Also rejects a
+    bidi-override codepoint (could visually disguise the domain) and an
+    embedded userinfo (``user@host`` — reads as a trusted domain up to the
+    ``@`` while actually pointing elsewhere).
     """
     if not isinstance(url, str) or not url.startswith("https://"):
         return False
-    return all(ord(c) >= 0x20 and c != "\x7f" for c in url)
+    if _CONTROL.search(url) or _BIDI.search(url):
+        return False
+    parts = urlsplit(url)
+    return "@" not in parts.netloc
 
 
 # Per-field caps matching protocol/openapi.yaml (and cli/src/sanitize.ts).

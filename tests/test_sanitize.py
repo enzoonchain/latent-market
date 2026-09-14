@@ -39,3 +39,27 @@ def test_is_safe_https_url():
     assert is_safe_https_url("javascript:alert(1)") is False
     assert is_safe_https_url("https://acme.example/\x1b") is False
     assert is_safe_https_url(None) is False
+
+
+def test_is_safe_https_url_rejects_c1_control_range():
+    # 0x9B is a single-byte CSI introducer some terminals treat like ESC-[ —
+    # sanitize_ad_text's _CONTROL already rejects the whole 0x80-0x9F range
+    # for ad body text; the URL check must reject it too, not just C0/DEL.
+    assert is_safe_https_url("https://acme.example/\x9b31mFAKE") is False
+
+
+def test_is_safe_https_url_rejects_userinfo_homograph():
+    # "https://trusted-brand.example@evil.com/x" is a syntactically valid
+    # URL to evil.com, but reads as trusted-brand.example up to the "@" —
+    # a classic phishing trick.
+    assert is_safe_https_url("https://trusted-brand.example@evil.com/x") is False
+    assert is_safe_https_url("https://acme.example/normal/path") is True
+
+
+def test_sanitize_ad_text_neutralizes_markdown_link_brackets():
+    """format_footer's telegram/markdown styles render this text through a
+    markdown parser — an advertiser body containing its own [text](url)
+    could inject a second, unvalidated link bypassing the cta_url gate."""
+    out = sanitize_ad_text("Buy now [Click here](https://evil.example/phish)")
+    assert "[" not in out and "]" not in out
+    assert "Click here" in out  # still readable, just not link-shaped

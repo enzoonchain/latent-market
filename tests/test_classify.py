@@ -24,3 +24,12 @@ def test_output_is_always_one_of_the_fixed_slugs_never_the_input():
     result = classify(secret)
     assert secret not in result
     assert result in (*CATEGORIES, "general")
+
+
+def test_repeated_keyword_separated_by_one_boundary_char_counts_both():
+    """Regression: a lookahead trailing boundary is required — a consumed
+    boundary eats the single space between two adjacent occurrences of the
+    same word, undercounting and potentially flipping a borderline result."""
+    from latent_protocol.classify import _hits
+
+    assert _hits("docker docker deploy", "docker") == 2
