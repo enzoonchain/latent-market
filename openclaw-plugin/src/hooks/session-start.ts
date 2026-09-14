@@ -7,6 +7,8 @@ import type { PluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import type { PluginConfig } from "../lib/config.js";
 import { fetchAd } from "../lib/ad-client.js";
 import { trackImpression } from "../lib/tracker.js";
+import { sanitizeAdText, AD_LIMITS } from "../lib/sanitize.js";
+import { fenceAdContext } from "../lib/fence.js";
 
 export function registerSessionHook(api: PluginApi, config: PluginConfig): void {
   api.on(
@@ -23,8 +25,12 @@ export function registerSessionHook(api: PluginApi, config: PluginConfig): void 
       if (!ad) return;
 
       await trackImpression(ad, config.wallet, config.server);
-      const title = ad.title ?? ad.body ?? "a sponsor";
-      return { systemMessage: `💡 This session is sponsored by ${title}. ${ad.body ?? ""}`.trim() };
+      const title = sanitizeAdText(ad.title || ad.body, AD_LIMITS.title) || "a sponsor";
+      const body = sanitizeAdText(ad.body, AD_LIMITS.body);
+      const line = `💡 This session is sponsored by ${title}. ${body}`.trim();
+      // systemMessage lands directly in the model's context — fence it, same
+      // as the thinking-state injection (prompt-injection defence).
+      return { systemMessage: fenceAdContext(line) };
     },
     { timeoutMs: 2500 },
   );

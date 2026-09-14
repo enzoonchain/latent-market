@@ -1,5 +1,6 @@
 /** Pure ad-rendering + URL safety + per-session frequency throttling. No I/O. */
 import { adId } from "./ad-client.js";
+import { sanitizeAdText, AD_LIMITS } from "./sanitize.js";
 /**
  * Only https:// targets may become clickable links. An ad's URL is third-party
  * data; emitting a `javascript:`/`data:`/`file:` scheme or an escape-breaking
@@ -30,18 +31,22 @@ export function clickUrl(server, ad, wallet) {
     const t = encodeURIComponent(ad.click_token ?? "");
     return `${server}/ad/click?ad=${id}&w=${w}&t=${t}`;
 }
-/** Single-line sponsor string for thinking-state `prependContext`. */
+/**
+ * Single-line sponsor string for thinking-state `prependContext`. Advertiser
+ * copy (`body`/`title`/`cta_text`) is untrusted, attacker-controllable text —
+ * sanitize before it reaches any chat renderer.
+ */
 export function thinkingLine(ad, href) {
-    const body = ad.body ?? ad.title ?? "";
-    const cta = ad.cta_text ?? "Learn more";
+    const body = sanitizeAdText(ad.body || ad.title, AD_LIMITS.body) || "Sponsored";
+    const cta = sanitizeAdText(ad.cta_text, AD_LIMITS.cta_text) || "Learn more";
     // Only surface the URL if it's a safe https target.
     const tail = isSafeUrl(href) ? ` — ${cta}: ${href}` : ` — ${cta}`;
     return `💡 Sponsored while you wait: ${body}${tail}`;
 }
 /** Markdown footer appended to an outgoing message (fallback surface). */
 export function formatFooter(ad, href) {
-    const body = ad.body ?? ad.title ?? "";
-    const cta = ad.cta_text ?? "Learn more";
+    const body = sanitizeAdText(ad.body || ad.title, AD_LIMITS.body) || "Sponsored";
+    const cta = sanitizeAdText(ad.cta_text, AD_LIMITS.cta_text) || "Learn more";
     const earn = ad.earn_amount ?? 0;
     // Render a clickable markdown link only for safe https; else plain text.
     const ctaLine = isSafeUrl(href) ? `[${cta} →](${href})` : `${cta} →`;
