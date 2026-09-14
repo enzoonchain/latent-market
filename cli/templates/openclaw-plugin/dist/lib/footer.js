@@ -18,11 +18,17 @@ export function isSafeUrl(url) {
  * Build the click-tracking redirect for an ad. The displayed CTA points here;
  * the server logs the click and 302s to the advertiser. Makes clicks
  * attributable in every channel where the link is clickable (clicks earn 50x).
+ *
+ * `t` is the signed click token from /ad/request — without it the server
+ * won't credit the click (S6 hardening: otherwise anyone who knows an ad_id +
+ * wallet, both public via /ad/leaderboard and /earnings, could forge a click
+ * for a wallet that never clicked anything).
  */
 export function clickUrl(server, ad, wallet) {
     const id = encodeURIComponent(adId(ad));
     const w = encodeURIComponent(wallet);
-    return `${server}/ad/click?ad=${id}&w=${w}`;
+    const t = encodeURIComponent(ad.click_token ?? "");
+    return `${server}/ad/click?ad=${id}&w=${w}&t=${t}`;
 }
 /** Single-line sponsor string for thinking-state `prependContext`. */
 export function thinkingLine(ad, href) {

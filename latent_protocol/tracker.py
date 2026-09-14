@@ -29,11 +29,16 @@ class Tracker:
         except httpx.HTTPError:
             pass  # best effort
 
-    def log_click(self, ad_id: str, wallet: str) -> None:
+    def log_click(self, ad_id: str, wallet: str, token: str = "") -> None:
+        """Report a click. ``token`` is the signed click token from the
+        /ad/request response — required server-side (S6 hardening): without
+        it the server won't credit the 50x click bonus for anyone who merely
+        knows an ad_id + wallet.
+        """
         try:
             httpx.post(
                 f"{self.server}/ad/click",
-                json={"ad_id": ad_id, "user_wallet": wallet},
+                json={"ad_id": ad_id, "user_wallet": wallet, "token": token},
                 timeout=2.0,
             )
         except httpx.HTTPError:

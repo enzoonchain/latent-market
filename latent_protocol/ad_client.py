@@ -2,6 +2,8 @@
 
 import httpx
 
+from .setup import device_id
+
 
 class AdClient:
     def __init__(self, server_url: str):
@@ -27,6 +29,7 @@ class AdClient:
                     "agent": agent,
                     "context": context,
                     "surface": surface,
+                    "device_id": device_id(),
                 },
                 timeout=2.0,
             )

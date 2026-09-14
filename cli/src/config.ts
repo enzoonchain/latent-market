@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 
 export const DEFAULT_SERVER = "https://api.latentprotocol.xyz";
 
@@ -48,6 +49,47 @@ export function binDir(): string {
 
 export function cacheFile(): string {
   return join(configDir(), "statusline_cache.json");
+}
+
+export function deviceIdFile(): string {
+  return join(configDir(), "device_id");
+}
+
+/**
+ * Stable per-install identifier, shared across every surface (Claude Code,
+ * Codex/MiMo, OpenClaw, the VS Code extension, and the Python adapters all
+ * read/write the same `~/.latent-protocol/device_id` file). Not a secret —
+ * just a correlation signal so the server can rate-limit/cap per physical
+ * machine, not only per (free, instantly-mintable) wallet.
+ *
+ * Best-effort: never throws. A read/write failure just means this call sends
+ * no device_id — ad serving must never depend on this file existing.
+ */
+export function deviceId(): string {
+  try {
+    const existing = readFileSync(deviceIdFile(), "utf8").trim();
+    if (existing) return existing;
+  } catch {
+    // fall through to create
+  }
+  const id = randomBytes(16).toString("hex");
+  try {
+    mkdirSync(configDir(), { recursive: true });
+    // Exclusive create: if another surface's process wins the race, this
+    // throws EEXIST and we fall through to re-read its winning value below.
+    writeFileSync(deviceIdFile(), id, { flag: "wx" });
+    return id;
+  } catch {
+    try {
+      const winner = readFileSync(deviceIdFile(), "utf8").trim();
+      if (winner) return winner;
+    } catch {
+      // FS unavailable — fall back to this call's in-memory id rather than
+      // block ad serving. Not persisted, so a future call may mint another;
+      // acceptable, this is a soft signal, not an identity guarantee.
+    }
+    return id;
+  }
 }
 
 /** @deprecated use configDir() — kept for status output compatibility */

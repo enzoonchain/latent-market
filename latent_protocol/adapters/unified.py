@@ -48,6 +48,10 @@ from ..tracker import Tracker
 
 Platform = Literal["hermes", "telegram", "cli", "mcp"]
 
+# Bounded ad_id -> click_token cache, capped so a long-running process
+# doesn't grow this unbounded.
+_MAX_TRACKED_ADS = 500
+
 STYLE_MAP: dict[str, str] = {
     "hermes": "markdown",
     "telegram": "telegram",
@@ -98,6 +102,9 @@ class UnifiedAdapter:
         self._client = AdClient(self._cfg.server)
         self._tracker = Tracker(self._cfg.server)
         self._counter = FrequencyCounter(self._cfg.frequency)
+        # ad_id -> click_token, so a later track_click(ad_id) call can prove
+        # to the server this was really our ad (S6 hardening).
+        self._click_tokens: dict[str, str] = {}
 
     @property
     def style(self) -> str:
@@ -108,6 +115,16 @@ class UnifiedAdapter:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _remember_click_token(self, ad: dict) -> None:
+        ad_id = ad.get("ad_id") or ad.get("id") or ""
+        token = ad.get("click_token") or ""
+        if not ad_id or not token:
+            return
+        if ad_id not in self._click_tokens and len(self._click_tokens) >= _MAX_TRACKED_ADS:
+            oldest = next(iter(self._click_tokens))
+            del self._click_tokens[oldest]
+        self._click_tokens[ad_id] = token
+
     def _reserve_ad(self, context: str = "general") -> dict | None:
         """Reserve a creative (no billing)."""
         if not self._cfg.enabled or not self._cfg.wallet:
@@ -116,13 +133,16 @@ class UnifiedAdapter:
             return None
         from ..delivery import reserve_ad
 
-        return reserve_ad(
+        ad = reserve_ad(
             self._client,
             wallet=self._cfg.wallet,
             context=context or "general",
             agent=self.platform,
             surface="response_footer",
         )
+        if ad:
+            self._remember_click_token(ad)
+        return ad
 
     # ------------------------------------------------------------------
     # Universal interface
@@ -157,6 +177,7 @@ class UnifiedAdapter:
         )
         if not ad:
             return text
+        self._remember_click_token(ad)
         out = text + format_footer(ad, style=self.style)
         confirm_if_displayed(self._tracker, ad, self._cfg.wallet, out)
         return out
@@ -201,8 +222,15 @@ class UnifiedAdapter:
         return self.wrap(text, context=context)
 
     def track_click(self, ad_id: str) -> None:
-        """Report a CTA click (Telegram inline-button tap, etc.)."""
-        self._tracker.log_click(ad_id, self._cfg.wallet)
+        """Report a CTA click (Telegram inline-button tap, etc.).
+
+        Delegates to the Telegram adapter on that platform — it holds its own
+        click-token cache, populated by its own ``wrap_response`` (see above).
+        """
+        if self.platform == "telegram" and hasattr(self, "_tg_adapter"):
+            self._tg_adapter.track_click(ad_id)
+            return
+        self._tracker.log_click(ad_id, self._cfg.wallet, self._click_tokens.get(ad_id, ""))
 
     # ------------------------------------------------------------------
     # CLI

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { resolveServer, resolveWallet } from "./config.js";
+import { deviceId, resolveServer, resolveWallet } from "./config.js";
 import { recordServerResult, shouldServe } from "./killswitch.js";
 
 export interface Ad {
@@ -37,6 +37,7 @@ export async function requestAd(opts: {
         surface: opts.surface,
         tags: opts.context ? [opts.context] : [],
         ...(opts.sessionId ? { session_id: opts.sessionId } : {}),
+        device_id: deviceId(),
       }),
       signal: AbortSignal.timeout(2000),
     });

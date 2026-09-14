@@ -7,11 +7,14 @@ Priority:    config file > env vars > built-in defaults
 from __future__ import annotations
 
 import json
+import os
 import re
+import secrets
 from pathlib import Path
 
 _CONFIG_DIR = Path.home() / ".latent-protocol"
 _CONFIG_FILE = _CONFIG_DIR / "config.json"
+_DEVICE_ID_FILE = _CONFIG_DIR / "device_id"
 _EVM_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 
 
@@ -31,6 +34,41 @@ def save_config_file(data: dict) -> None:
     existing = load_config_file()
     existing.update(data)
     _CONFIG_FILE.write_text(json.dumps(existing, indent=2))
+
+
+def device_id() -> str:
+    """Stable per-install identifier, shared with every other surface — the
+    TS surfaces (Claude Code, Codex/MiMo, OpenClaw, the VS Code extension)
+    read/write this same ``~/.latent-protocol/device_id`` file. Not a secret;
+    just a correlation signal so the server can cap per physical machine, not
+    only per (free, instantly-mintable) wallet.
+
+    Best-effort: never raises. A read/write failure just means this call
+    reports no device_id — ad serving must never depend on this file.
+    """
+    try:
+        existing = _DEVICE_ID_FILE.read_text().strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    new_id = secrets.token_hex(16)
+    try:
+        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        # Exclusive create: if another surface's process wins the race, this
+        # raises FileExistsError and we fall through to re-read its value.
+        fd = os.open(_DEVICE_ID_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        with os.fdopen(fd, "w") as f:
+            f.write(new_id)
+        return new_id
+    except OSError:
+        try:
+            winner = _DEVICE_ID_FILE.read_text().strip()
+            if winner:
+                return winner
+        except OSError:
+            pass  # FS unavailable — fall back to this call's in-memory id
+        return new_id
 
 
 # ── Wallet helpers ───────────────────────────────────────────────────────────

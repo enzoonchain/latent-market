@@ -82,19 +82,38 @@ try {
   const { render } = await import("../dist/statusline.js");
 
   const session = { session_id: "sess-A" };
+  const cachePath = join(home, ".latent-protocol", "statusline_cache.json");
+
+  /** Rewind the cached ad's dwell-time baseline so the next render() sees
+   *  enough elapsed time to bill, without a real sleep. */
+  function ageShownAt(ms) {
+    const cached = JSON.parse(readFileSync(cachePath, "utf8"));
+    cached.shown_at_ms -= ms;
+    writeFileSync(cachePath, JSON.stringify(cached));
+  }
 
   // ── Case A: the prefetched ad is what the user sees ──────────────────────
   //
   // The hook prefetches at turn-start, the status line renders that ad across
   // several refreshes inside the rotation window, then the turn ends. Three
-  // refreshes of one ad are still one impression.
+  // refreshes of one ad are still one impression — billed once real dwell
+  // time (not just repeated polls) has accrued, per the deferred-billing
+  // design in statusline.ts.
   await runHook("turn-start", "claude-code", {
     ...session,
     prompt: "fix a failing rust build",
   });
 
+  // First render establishes the dwell-time baseline (turn hook prefetched
+  // it, but that alone never counts as "shown") — no bill yet.
   const first = await render(session);
+  assert.equal(impressions.length, 0, "billed before any real dwell time accrued");
+
+  // Simulate 4s of real on-screen time (> MIN_DISPLAY_MS_BEFORE_BILL).
+  ageShownAt(4000);
   const second = await render(session);
+
+  // A third poll, still within the rotation window, must not double-bill.
   const third = await render(session);
 
   await runHook("turn-end", "claude-code", session);
@@ -110,6 +129,7 @@ try {
       JSON.stringify(impressions.map((i) => i.ad_id)),
   );
   assert.equal(impressions[0].ad_id, "ad-1", "billed an ad that was never displayed");
+  assert.ok(impressions[0].displayed_ms >= 4000, "billed without real dwell time");
   assert.ok(first.includes("body #1"), "displayed an ad other than the billed one");
 
   // ── Case B: the prefetched ad goes stale before anything renders ─────────
@@ -119,6 +139,10 @@ try {
   // prefetch and fetches its own ad. Only that second ad ever reaches the
   // screen — but the hook still held the first one in its state and billed for
   // it at turn-end, charging the advertiser for an impression nobody saw.
+  //
+  // Under deferred billing this is doubly guarded: the stale prefetch never
+  // got a shown_at_ms (nothing ever rendered it), so the flush-on-rotation
+  // path in statusline.ts must skip it even though it's unbilled.
   impressions.length = 0;
   requests.length = 0;
 
@@ -129,12 +153,21 @@ try {
 
   // Age the cached prefetch past the rotation window instead of sleeping, so
   // the test stays deterministic and fast.
-  const cachePath = join(home, ".latent-protocol", "statusline_cache.json");
   const cached = JSON.parse(readFileSync(cachePath, "utf8"));
   cached.fetched_at -= 3600;
   writeFileSync(cachePath, JSON.stringify(cached));
 
+  // First render after the prefetch went stale: discards it (never billed —
+  // it was never shown), fetches its own ad-2, caches it un-billed.
   const displayed = await render(session);
+  assert.equal(
+    impressions.length,
+    0,
+    "billed the stale prefetch, or billed the new ad before any dwell time",
+  );
+
+  ageShownAt(4000);
+  await render(session);
   await runHook("turn-end", "claude-code", session);
 
   assert.ok(displayed, "status line rendered nothing after the prefetch went stale");

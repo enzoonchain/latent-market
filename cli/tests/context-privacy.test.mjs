@@ -83,12 +83,21 @@ test("status line sends a category slug, not the raw prompt; impression has even
     assert.match(ctx, /^[a-z-]+$/, `not a slug: ${ctx}`);
     assert.equal(requests[0].tags?.[0], ctx);
 
+    // Billing is deferred until real on-screen dwell time accrues (see
+    // statusline.ts) — the render above only started the clock. Age the
+    // cache instead of sleeping so the test stays fast and deterministic.
+    assert.equal(impressions.length, 0, "billed before any real dwell time accrued");
+    const cachePath = join(home, ".latent-protocol", "statusline_cache.json");
+    let cache = JSON.parse(readFileSync(cachePath, "utf8"));
+    cache.shown_at_ms -= 4000;
+    writeFileSync(cachePath, JSON.stringify(cache));
+    await render({ session_id: "s1" });
+
     assert.equal(impressions.length, 1);
     assert.match(impressions[0].event_uuid ?? "", /^[0-9a-f-]{36}$/);
 
     // A re-render of the same cached ad reuses the same key (idempotent).
-    const cachePath = join(home, ".latent-protocol", "statusline_cache.json");
-    const cache = JSON.parse(readFileSync(cachePath, "utf8"));
+    cache = JSON.parse(readFileSync(cachePath, "utf8"));
     cache.billed = false;
     writeFileSync(cachePath, JSON.stringify(cache));
     await render({ session_id: "s1" });

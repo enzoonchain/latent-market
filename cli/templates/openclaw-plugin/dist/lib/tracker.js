@@ -31,5 +31,9 @@ export async function trackImpression(ad, wallet, server) {
     });
 }
 export async function trackClick(ad, wallet, server) {
-    await post(`${server}/ad/click`, { ad_id: adId(ad), user_wallet: wallet });
+    await post(`${server}/ad/click`, {
+        ad_id: adId(ad),
+        user_wallet: wallet,
+        token: ad.click_token ?? "",
+    });
 }

@@ -4,6 +4,7 @@
  * Mirrors the Python `AdClient` / `Tracker`. Every call is fail-open with a
  * hard 2s timeout — the agent must never stall or break because of ads.
  */
+import { deviceId } from "./config.js";
 const TIMEOUT_MS = 2000;
 async function postJson(url, body) {
     const controller = new AbortController();
@@ -30,6 +31,7 @@ export async function fetchAd(req) {
         agent: "openclaw",
         context: req.context.slice(0, 100) || "general",
         surface: req.surface,
+        device_id: deviceId(),
     });
     if (!resp || !resp.ok)
         return null;

@@ -16,9 +16,21 @@ import { AD_LIMITS, sanitizeAdText } from "./sanitize.js";
 // 10s rotation = CodeBacks parity (ADS_STATUSLINE_ROTATE still overrides).
 const DEFAULT_ROTATE_SECONDS = 10;
 
+// Don't bother billing before this much real on-screen time has accrued —
+// the server's own MIN_VIEW_MS is authoritative (this is a client-side
+// convenience threshold, not the enforcement point); mirrors the default so
+// most impressions clear the server gate on the first attempt.
+const MIN_DISPLAY_MS_BEFORE_BILL = 3000;
+// Same cap `cli/src/adcache.ts` uses for the turn-hook surface — a stale
+// cache from a much earlier, since-abandoned session shouldn't report hours
+// of "dwell time".
+const MAX_DISPLAY_MS = 600_000;
+
 interface Cache {
   ad?: Ad;
   fetched_at?: number;
+  /** Epoch ms when this cached ad was first served — the dwell-time baseline. */
+  shown_at_ms?: number;
   session_id?: string;
   /**
    * True once POST /ad/impression has been sent for this cached ad.
@@ -117,22 +129,70 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
   // once, whoever fetched the ad. The turn hook deliberately does not bill
   // (see HOOK_OWNS_IMPRESSION in hook.ts) — if both did, one displayed ad
   // would be charged to the advertiser twice.
+  //
+  // Billing is deferred, not immediate: this script re-runs as a fresh
+  // process on every status-line refresh tick (Claude Code polls it), so the
+  // cache file is the only place elapsed on-screen time can live between
+  // calls. We bill the FIRST poll where enough real dwell time has accrued
+  // (see MIN_DISPLAY_MS_BEFORE_BILL) instead of the instant the ad is
+  // fetched — mirrors the turn hook's already-real dwell reporting
+  // (cli/src/hook.ts), which this surface previously didn't do at all.
   if (fresh && cache.ad) {
     const line = formatStatusline(cache.ad);
     if (!line) return "";
     if (!cache.billed) {
-      const eventId = cache.event_uuid ?? randomUUID();
+      if (cache.shown_at_ms === undefined) {
+        // First time THIS status line has actually displayed this ad. It may
+        // already sit in the cache because the turn hook prefetched it (see
+        // writeStatuslineCache in hook.ts, which never sets shown_at_ms) —
+        // that alone does not count as shown, only reaching this render()
+        // call with a non-empty line does. Start the dwell clock now, and
+        // mint the idempotency key up front so every later attempt to bill
+        // this same occurrence (fresh-branch or the flush-on-rotation path
+        // below) reuses one event_uuid.
+        saveCache({ ...cache, shown_at_ms: Date.now(), event_uuid: cache.event_uuid ?? randomUUID() });
+        return line;
+      }
+      const elapsedMs = Math.min(Date.now() - cache.shown_at_ms, MAX_DISPLAY_MS);
+      if (elapsedMs >= MIN_DISPLAY_MS_BEFORE_BILL) {
+        const eventId = cache.event_uuid ?? randomUUID();
+        await logImpression(
+          cache.ad.ad_id || cache.ad.id || "",
+          wallet,
+          cache.ad.impression_token || "",
+          server,
+          elapsedMs,
+          eventId,
+        );
+        saveCache({ ...cache, billed: true, event_uuid: eventId });
+      }
+      // else: not enough elapsed time yet — try again on the next poll
+      // while this ad is still fresh; no bill, no cache write.
+    }
+    return line;
+  }
+
+  // The cache is stale (rotation window elapsed) or foreign (session
+  // changed). If it holds an ad THIS status line actually displayed
+  // (shown_at_ms set) but never crossed the billing threshold above, flush
+  // it now with whatever real elapsed time it actually got — the server's
+  // own MIN_VIEW_MS is authoritative, this just reports the truth instead of
+  // silently dropping a briefly-shown ad. An ad the turn hook merely
+  // prefetched and this status line never got to render (shown_at_ms still
+  // unset) must never be billed — nobody saw it.
+  if (cache.ad && !cache.billed && cache.shown_at_ms !== undefined) {
+    const staleAdId = cache.ad.ad_id || cache.ad.id || "";
+    if (staleAdId) {
+      const elapsedMs = Math.min(Date.now() - cache.shown_at_ms, MAX_DISPLAY_MS);
       await logImpression(
-        cache.ad.ad_id || cache.ad.id || "",
+        staleAdId,
         wallet,
         cache.ad.impression_token || "",
         server,
-        undefined,
-        eventId,
+        elapsedMs,
+        cache.event_uuid ?? randomUUID(),
       );
-      saveCache({ ...cache, billed: true, event_uuid: eventId });
     }
-    return line;
   }
 
   const ad = await requestAd({
@@ -144,14 +204,20 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
   });
   if (!ad) return "";
 
-  // Reserve → render → confirm. Bill only after we have a statusline string
-  // Claude Code will display.
   const line = formatStatusline(ad);
   if (!line) return "";
-  const adId = ad.ad_id || ad.id || "";
-  const eventId = randomUUID();
-  await logImpression(adId, wallet, ad.impression_token || "", server, undefined, eventId);
-  saveCache({ ad, fetched_at: now, session_id: sessionId, billed: true, event_uuid: eventId });
+  // Reserve → render → cache un-billed. Billing happens on a later poll
+  // (above), once we know how long this ad was actually on screen. Mint the
+  // idempotency key now, at first display, so whichever later poll ends up
+  // billing this occurrence reuses the same event_uuid.
+  saveCache({
+    ad,
+    fetched_at: now,
+    shown_at_ms: Date.now(),
+    session_id: sessionId,
+    billed: false,
+    event_uuid: randomUUID(),
+  });
   return line;
 }
 

@@ -296,7 +296,19 @@ test("staged bundles fetch an ad and bill exactly one impression", async () => {
       "hook did not prefetch into the status line cache",
     );
 
+    // Billing is deferred until real on-screen dwell time accrues (see
+    // statusline.ts): the first invocation only starts the dwell clock —
+    // the turn hook's prefetch above never counts as "shown" on its own.
     const a = await runNode(binSL, [], session);
+    assert.equal(impressions.length, 0, "billed before any real dwell time accrued");
+
+    // Simulate real elapsed time (> MIN_DISPLAY_MS_BEFORE_BILL) without a
+    // real sleep, mirroring cli/tests/impression-ownership.test.mjs.
+    const cachePath = join(home, ".latent-protocol", "statusline_cache.json");
+    const cached = JSON.parse(readFileSync(cachePath, "utf8"));
+    cached.shown_at_ms -= 4000;
+    writeFileSync(cachePath, JSON.stringify(cached));
+
     const b = await runNode(binSL, [], session);
     assert.ok(a.out.includes("sponsored body"), `status line did not render: ${JSON.stringify(a.out)}`);
     assert.equal(a.out, b.out, "status line changed ad mid-rotation");
@@ -305,6 +317,7 @@ test("staged bundles fetch an ad and bill exactly one impression", async () => {
       1,
       `one displayed ad must bill once, got ${impressions.length}`,
     );
+    assert.ok(impressions[0].displayed_ms >= 4000, "billed without real dwell time");
   } finally {
     server.close();
   }

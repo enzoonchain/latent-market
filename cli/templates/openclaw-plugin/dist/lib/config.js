@@ -7,9 +7,10 @@
  * `npx latent-protocol init`), and defaults so a single `getConfig(raw)` call
  * is the only config source the hooks ever touch.
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 const DEFAULT_SERVER = "https://api.latentprotocol.xyz";
 function envBool(value, fallback) {
     if (value === undefined)
@@ -48,6 +49,43 @@ function readLatentConfigFile() {
         }
     }
     return {};
+}
+const DEVICE_ID_FILE = join(homedir(), ".latent-protocol", "device_id");
+/**
+ * Stable per-install identifier, shared with every other surface (Claude
+ * Code, Codex/MiMo, the VS Code extension, and the Python adapters all
+ * read/write this same file). Not a secret — a correlation signal so the
+ * server can cap per physical machine, not only per (free, instantly-
+ * mintable) wallet. Best-effort: never throws.
+ */
+export function deviceId() {
+    try {
+        const existing = readFileSync(DEVICE_ID_FILE, "utf8").trim();
+        if (existing)
+            return existing;
+    }
+    catch {
+        // fall through to create
+    }
+    const id = randomBytes(16).toString("hex");
+    try {
+        mkdirSync(join(homedir(), ".latent-protocol"), { recursive: true });
+        // Exclusive create: if another surface's process wins the race, this
+        // throws EEXIST and we fall through to re-read its winning value below.
+        writeFileSync(DEVICE_ID_FILE, id, { flag: "wx" });
+        return id;
+    }
+    catch {
+        try {
+            const winner = readFileSync(DEVICE_ID_FILE, "utf8").trim();
+            if (winner)
+                return winner;
+        }
+        catch {
+            // FS unavailable — fall back to this call's in-memory id.
+        }
+        return id;
+    }
 }
 /** Merge the SDK-provided config with env fallbacks and defaults. */
 export function getConfig(raw = {}) {
