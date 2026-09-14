@@ -33,7 +33,7 @@ from pathlib import Path
 
 from ..ad_client import AdClient
 from ..config import Config
-from ..sanitize import AD_LIMITS, sanitize_ad_text
+from ..sanitize import AD_LIMITS, is_safe_https_url, sanitize_ad_text
 from ..tracker import Tracker
 
 _CONFIG_DIR = Path.home() / ".latent-protocol"
@@ -52,12 +52,13 @@ def _is_safe_url(url: str) -> bool:
     An ad's cta_url is third-party data. Emitting it verbatim inside an OSC 8
     escape would let a malicious advertiser ship dangerous schemes
     (javascript:, file:, data:, control-char tricks) as a clickable link in the
-    user's terminal. Restrict to plain https with no embedded escapes.
+    user's terminal. Thin wrapper over the shared `sanitize.is_safe_https_url`
+    (kept as its own name here since existing tests call `cc._is_safe_url`
+    directly) — this used to be its own, slightly looser copy (only rejected
+    ESC/BEL, not the full control range) that had already started drifting
+    from the shared check.
     """
-    if not isinstance(url, str) or not url.startswith("https://"):
-        return False
-    # Reject embedded control chars / escape-sequence breakers.
-    return all(ord(c) >= 0x20 and c not in ("\033", "\007") for c in url)
+    return is_safe_https_url(url)
 
 
 def _osc8_link(text: str, url: str) -> str:
