@@ -12,6 +12,7 @@
 import { fetchAd } from "../lib/ad-client.js";
 import { trackImpression } from "../lib/tracker.js";
 import { formatFooter, clickUrl } from "../lib/footer.js";
+import { classifyMessage } from "../lib/classify.js";
 const HOOK_TIMEOUT_MS = 2500;
 export function registerFooterHook(api, config, freq, ledger) {
     api.on("message_sending", async (event) => {
@@ -21,9 +22,11 @@ export function registerFooterHook(api, config, freq, ledger) {
             return; // thinking hook owns this turn
         if (!freq.tick(event.sessionId))
             return;
+        // Classify locally — only the category slug leaves the machine, never
+        // the raw outgoing message text.
         const ad = await fetchAd({
             wallet: config.wallet,
-            context: event.content ?? "general",
+            context: classifyMessage(event.content),
             surface: "response_footer",
             server: config.server,
         });

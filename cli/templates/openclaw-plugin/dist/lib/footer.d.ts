@@ -17,7 +17,11 @@ export declare function isSafeUrl(url: string): boolean;
  * for a wallet that never clicked anything).
  */
 export declare function clickUrl(server: string, ad: Ad, wallet: string): string;
-/** Single-line sponsor string for thinking-state `prependContext`. */
+/**
+ * Single-line sponsor string for thinking-state `prependContext`. Advertiser
+ * copy (`body`/`title`/`cta_text`) is untrusted, attacker-controllable text —
+ * sanitize before it reaches any chat renderer.
+ */
 export declare function thinkingLine(ad: Ad, href: string): string;
 /** Markdown footer appended to an outgoing message (fallback surface). */
 export declare function formatFooter(ad: Ad, href: string): string;

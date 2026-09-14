@@ -21,6 +21,8 @@ import type { PluginConfig } from "../lib/config.js";
 import { fetchAd } from "../lib/ad-client.js";
 import { trackImpression } from "../lib/tracker.js";
 import { thinkingLine, clickUrl, SessionFrequency } from "../lib/footer.js";
+import { classifyMessage } from "../lib/classify.js";
+import { fenceAdContext } from "../lib/fence.js";
 import { TurnLedger } from "./turn-ledger.js";
 
 const HOOK_TIMEOUT_MS = 2500; // a touch above the ad-client's 2s, then bail
@@ -41,9 +43,11 @@ export function registerThinkingHook(
         return;
       }
 
+      // Classify locally — only the category slug leaves the machine, never
+      // the raw message (same privacy invariant as cli/src/classify.ts).
       const ad = await fetchAd({
         wallet: config.wallet,
-        context: event.userMessage ?? "general",
+        context: classifyMessage(event.userMessage),
         surface: "thinking_state",
         server: config.server,
       });
@@ -61,7 +65,9 @@ export function registerThinkingHook(
       // Confirm only when we hand OpenClaw a prependContext it will show.
       await trackImpression(ad, config.wallet, config.server);
       ledger.markShown(event.sessionId);
-      return { prependContext: line };
+      // prependContext lands directly in the model's context — fence it so
+      // advertiser copy can't be mistaken for an instruction (prompt injection).
+      return { prependContext: fenceAdContext(line) };
     },
     { timeoutMs: HOOK_TIMEOUT_MS },
   );

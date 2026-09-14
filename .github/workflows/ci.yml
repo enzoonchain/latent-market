@@ -100,6 +100,12 @@ jobs:
       - name: Install
         run: npm install --include=dev --prefix openclaw-plugin
 
+      - name: Typecheck
+        run: npm run typecheck --prefix openclaw-plugin
+
+      - name: Tests
+        run: npm test --prefix openclaw-plugin
+
       - name: Build
         run: npm run build --prefix openclaw-plugin
 
