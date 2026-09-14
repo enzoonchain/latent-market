@@ -13,6 +13,7 @@ Fail-open for UX (agent never blocks on ads). Fail-closed for money
 from __future__ import annotations
 
 from .ad_client import AdClient
+from .classify import classify
 from .tracker import Tracker
 
 # Markers produced by ``footer.format_footer`` / statusline / thinking lines.
@@ -38,10 +39,18 @@ def reserve_ad(
     agent: str,
     surface: str,
 ) -> dict | None:
-    """Fetch an ad + impression_token. Does **not** bill."""
+    """Fetch an ad + impression_token. Does **not** bill.
+
+    ``context`` is the caller's raw targeting text — several adapters pass the
+    user's actual message or the assistant's response text here (see e.g.
+    ``adapters/telegram.py``'s docstring). That text must never leave this
+    machine: it is classified into a coarse category slug (``classify.py``,
+    mirrors ``cli/src/classify.ts``) before the request goes out, same as
+    every other Latent surface already does.
+    """
     return client.get_ad(
         wallet=wallet,
-        context=(context or "general")[:100],
+        context=classify(context),
         agent=agent,
         surface=surface,
     )

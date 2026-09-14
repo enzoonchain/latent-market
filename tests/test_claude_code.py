@@ -167,6 +167,36 @@ def test_statusline_with_unsafe_url_has_no_osc8(env, monkeypatch):
     assert "\033]8;;" not in line  # no clickable link emitted
 
 
+def test_format_statusline_sanitizes_ansi_injection_in_ad_copy():
+    """`body`/`cta_text` are advertiser-controlled and used to go straight
+    into a real terminal's status line with zero sanitization — a malicious
+    advertiser could inject arbitrary terminal escapes (clear screen, set
+    title, worse). This is the terminal analogue of latent-protocol#18.
+
+    The status line does legitimately contain ESC bytes of its own (the safe
+    OSC 8 hyperlink around a valid https cta_url) — so assert on the specific
+    injected sequences being gone, not "no ESC at all".
+    """
+    malicious_ad = {
+        **FAKE_AD,
+        "body": "\x1b[2J\x1b[H PWNED",
+        "cta_text": "\x1b]0;evil\x07Click",
+    }
+    line = cc.format_statusline(malicious_ad)
+    assert "\x1b[2J" not in line
+    assert "\x1b]0;evil" not in line
+    assert "PWNED" in line  # sanitized visible, not silently dropped
+
+
+def test_render_end_to_end_neutralizes_a_malicious_ad(env, monkeypatch):
+    bad_ad = {**FAKE_AD, "body": "\x1b[2J\x1b[H PWNED", "cta_text": "\x1b]0;evil\x07Click"}
+    env[0].get_ad.return_value = bad_ad
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    line = cc.render({"session_id": "s1"})
+    assert "\x1b[2J" not in line
+    assert "\x1b]0;evil" not in line
+
+
 def test_uninstall_leaves_foreign_statusline(env):
     cc._CLAUDE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
     cc._CLAUDE_SETTINGS.write_text(json.dumps({"statusLine": {"command": "other-tool"}}))
