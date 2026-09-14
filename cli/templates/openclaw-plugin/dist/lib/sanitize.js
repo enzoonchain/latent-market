@@ -18,6 +18,13 @@ const ESC_SEQ = /\x1b\][\s\S]*?(?:\x07|\x1b\\|$)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[ -
 const CONTROL = /[\x00-\x1f\x7f-\x9f]/g;
 /** Bidi overrides / isolates / deprecated formatting chars. */
 const BIDI = /[‪-‮⁦-⁩‎‏؜]/g;
+// `formatFooter`/`session-start.ts`'s systemMessage render this text on
+// channels that parse markdown (Discord, Telegram, …). `[`/`]` are what
+// forms a `[text](url)` link — an advertiser body/cta_text containing its
+// own bracket pair could inject a second, unvalidated link that never went
+// through `isSafeUrl`. Swap for visually-similar fullwidth brackets (not
+// markdown-active) rather than stripping, so the text still reads naturally.
+const MD_LINK_BRACKETS = { "[": "［", "]": "］" };
 /**
  * Clean advertiser text for a display sink. `max` clamps the visible length
  * (an ellipsis is appended when clipped). Returns "" for nullish input.
@@ -25,6 +32,7 @@ const BIDI = /[‪-‮⁦-⁩‎‏؜]/g;
 export function sanitizeAdText(input, max = 140) {
     let s = String(input ?? "");
     s = s.replace(ESC_SEQ, "").replace(CONTROL, " ").replace(BIDI, "");
+    s = s.replace(/[[\]]/g, (c) => MD_LINK_BRACKETS[c]);
     s = s.replace(/\s+/g, " ").trim();
     if (max > 0 && s.length > max)
         s = `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`;

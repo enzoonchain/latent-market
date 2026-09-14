@@ -48,7 +48,24 @@ interface Cache {
 
 function isSafeUrl(url: string): boolean {
   if (typeof url !== "string" || !url.startsWith("https://")) return false;
-  return [...url].every((c) => c.charCodeAt(0) >= 0x20 && c !== "\u001b" && c !== "\u0007");
+  // Full C0 (not just ESC/BEL) + C1 control range — a single-byte CSI
+  // introducer (0x9B) is treated like ESC-[ by some terminals, same as the
+  // OSC-8 escape this URL is about to be wrapped in.
+  if (
+    [...url].some(
+      (c) => c.charCodeAt(0) < 0x20 || (c.charCodeAt(0) >= 0x7f && c.charCodeAt(0) <= 0x9f),
+    )
+  ) {
+    return false;
+  }
+  // Reject embedded userinfo (`user@host`) — a phishing URL can otherwise
+  // read as a trusted domain up to the `@` while actually pointing elsewhere.
+  try {
+    const parsed = new URL(url);
+    return parsed.username === "" && parsed.password === "";
+  } catch {
+    return false;
+  }
 }
 
 function osc8Link(text: string, url: string): string {
