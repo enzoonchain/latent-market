@@ -17,7 +17,6 @@ import { formatDetectionTable, formatSurfaceMatrix } from "./detect.js";
 
 export interface PrelaunchOpts extends WalletOpts {
   days?: number;
-  server?: string;
   skipRegister?: boolean;
 }
 
@@ -34,8 +33,10 @@ export async function runPrelaunch(opts: PrelaunchOpts = {}): Promise<void> {
 
   const wallet = await ensureWallet({
     yes: opts.yes,
-    generate: opts.generate ?? opts.yes,
+    generate: opts.generate,
     wallet: opts.wallet,
+    email: opts.email,
+    server,
   });
 
   saveConfig({
@@ -95,7 +96,7 @@ export async function runActivate(): Promise<void> {
   const cfg = loadConfig();
   const wallet = resolveWallet(cfg);
   if (!wallet) {
-    console.error("No wallet found. Run: npx latent-protocol prelaunch --yes --generate");
+    console.error("No wallet found. Run: npx latent-protocol prelaunch --wallet 0x…  or  --email you@domain");
     process.exitCode = 1;
     return;
   }

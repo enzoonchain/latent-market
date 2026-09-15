@@ -95,7 +95,7 @@ Plugins are **opt-in** — you must enable them.
 ```bash
 npx github:enzoonchain/latent-protocol init
 # or non-interactive:
-npx github:enzoonchain/latent-protocol init --yes --generate
+npx latent-protocol init --wallet 0x…
 ```
 
 (Shortens to `npx latent-protocol init` once the npm publish lands.)
