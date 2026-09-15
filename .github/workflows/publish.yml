@@ -93,11 +93,13 @@ jobs:
 
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
-        run: npm publish --dry-run --provenance --access public --tag ${{ steps.dist.outputs.tag }} --prefix cli
+        working-directory: cli
+        run: npm publish --dry-run --provenance --access public --tag ${{ steps.dist.outputs.tag }}
 
       - name: Publish
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
-        run: npm publish --provenance --access public --tag ${{ steps.dist.outputs.tag }} --prefix cli
+        working-directory: cli
+        run: npm publish --provenance --access public --tag ${{ steps.dist.outputs.tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
