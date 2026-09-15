@@ -138,16 +138,19 @@ async function cmdInit(args: string[]): Promise<void> {
     }
   }
 
+  // Canonical first: a retired Railway hostname passed with --server has to be
+  // migrated before the wallet call goes out, or `init` pregenerates against a
+  // host that is gone. `prelaunch` already does it in this order.
+  const server = flags.server
+    ? canonicalizeServer(flags.server)
+    : resolveServer(loadConfig());
   const wallet = await ensureWallet({
     yes: flags.yes,
     generate: flags.generate,
     wallet: flags.wallet,
     email: flags.email,
-    server: flags.server,
+    server,
   });
-  const server = flags.server
-    ? canonicalizeServer(flags.server)
-    : resolveServer(loadConfig());
   // Persist canonical server + every-message ads (overrides older frequency: 5 configs).
   saveConfig({ server, frequency: 1 });
   console.log(`\n💳 Wallet: ${wallet}`);

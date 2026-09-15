@@ -49,13 +49,44 @@ function persist(
   return address;
 }
 
-async function defaultQuestion(prompt: string): Promise<string> {
-  const rl = createInterface({ input, output });
-  try {
-    return (await rl.question(prompt)).trim();
-  } finally {
-    rl.close();
-  }
+const EOF_HINT =
+  "stdin closed before answering. Re-run with --wallet 0x…, --email you@domain, " +
+  "or --yes to keep the wallet already on file.";
+
+/**
+ * One readline for the whole prompt sequence.
+ *
+ * A fresh interface per question ends the stream when it closes, so the second
+ * question of a piped run ([3] then the address) never saw its answer. And on
+ * EOF — a script, a CI job, anything with no one at the keyboard — readline's
+ * promise simply never settles, so `init` printed the menu and exited 0 with
+ * no wallet and no error, which reads as success to whatever ran it.
+ */
+function createAsker(): { ask: (prompt: string) => Promise<string>; close: () => void } {
+  let rl: ReturnType<typeof createInterface> | undefined;
+  let ended = false;
+
+  return {
+    async ask(prompt: string): Promise<string> {
+      if (ended) throw new Error(EOF_HINT);
+      if (!rl) {
+        rl = createInterface({ input, output });
+        rl.once("close", () => {
+          ended = true;
+        });
+      }
+      const answer = await Promise.race([
+        rl.question(prompt),
+        new Promise<string>((_, reject) => {
+          rl!.once("close", () => reject(new Error(EOF_HINT)));
+        }),
+      ]);
+      return answer.trim();
+    },
+    close() {
+      rl?.close();
+    },
+  };
 }
 
 async function viaAuthLink(opts: WalletOpts, log: (s: string) => void): Promise<string> {
@@ -94,8 +125,19 @@ async function viaEmail(opts: WalletOpts, email: string, log: (s: string) => voi
 }
 
 export async function ensureWallet(opts: WalletOpts = {}): Promise<string> {
+  const asker = opts.question ? undefined : createAsker();
+  try {
+    return await bindWallet(opts, opts.question ?? asker!.ask);
+  } finally {
+    asker?.close();
+  }
+}
+
+async function bindWallet(
+  opts: WalletOpts,
+  ask: (prompt: string) => Promise<string>,
+): Promise<string> {
   const log = opts.log ?? ((line: string) => console.log(line));
-  const ask = opts.question ?? defaultQuestion;
   const existing = loadConfig().wallet;
 
   if (opts.wallet) {

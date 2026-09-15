@@ -13,7 +13,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -89,4 +89,28 @@ test("the bundled CLI's `init` stages the runtime — asset paths survive bundli
   assert.match(settings, /hook\.mjs\\" turn-start --agent claude-code/);
   const codex = readFileSync(join(home, ".codex", "hooks.json"), "utf8");
   assert.ok(!/\bnpx\b/.test(codex), "npx in codex hooks.json");
+});
+
+test("`init` on closed stdin fails loudly instead of exiting 0 with no wallet", () => {
+  const home = mkdtempSync(join(tmpdir(), "latent-eof-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(home, ".claude", "settings.json"), "{}");
+
+  let status = 0;
+  let output = "";
+  try {
+    output = execFileSync(process.execPath, [dist("index.js"), "init"], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home },
+      stdio: ["pipe", "pipe", "pipe"],
+      input: "",
+    });
+  } catch (err) {
+    status = err.status;
+    output = `${err.stdout ?? ""}${err.stderr ?? ""}`;
+  }
+
+  assert.notEqual(status, 0, `expected a non-zero exit, got ${status}:\n${output}`);
+  assert.match(output, /stdin closed before answering/);
+  assert.equal(existsSync(join(home, ".latent-protocol", "config.json")), false);
 });
