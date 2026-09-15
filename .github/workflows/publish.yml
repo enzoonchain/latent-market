@@ -2,12 +2,17 @@ name: Publish CLI to npm
 
 # Publishes `cli/` (package `latent-protocol`) to the npm registry.
 #
-# Trigger: a GitHub Release whose tag is `cli-v<semver>` (e.g. cli-v0.1.4), or a
-# manual run. The tag version must match cli/package.json's version or the job
-# fails before publishing.
+# Trigger: a GitHub Release whose tag is `cli-v<semver>` (e.g. cli-v0.1.4
+# or cli-v0.1.4-beta.1), or a manual run. The tag version must match
+# cli/package.json's version or the job fails before publishing.
 #
-# Requires repo secret NPM_TOKEN — an npm automation token with publish rights
-# on `latent-protocol`. Provenance is attested via OIDC (id-token: write).
+# Prerelease versions (semver with a `-`, e.g. 0.1.4-beta.1) publish to the
+# `beta` dist-tag. A first public beta also points `latest` at that version
+# so `npx latent-protocol` resolves until a stable release exists.
+#
+# Auth: NPM_TOKEN repo secret (automation token with publish rights), or
+# npm trusted publishing on this workflow once the package exists.
+# Provenance is attested via OIDC (id-token: write).
 
 on:
   release:
@@ -18,10 +23,14 @@ on:
         description: "Build and pack only; do not publish"
         type: boolean
         default: true
+      also_tag_latest:
+        description: "Also point the latest dist-tag at this version (use for the first public beta)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # npm provenance + trusted publishing
 
 jobs:
   publish:
@@ -48,6 +57,21 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve dist-tag
+        id: dist
+        run: |
+          VER=$(node -p "require('./cli/package.json').version")
+          NAME=$(node -p "require('./cli/package.json').name")
+          if [[ "$VER" == *-* ]]; then
+            DIST_TAG=beta
+          else
+            DIST_TAG=latest
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing $NAME@$VER with dist-tag $DIST_TAG"
+
       - name: Build + typecheck + test
         run: |
           npm run typecheck --prefix cli
@@ -69,10 +93,19 @@ jobs:
 
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
-        run: npm publish --dry-run --provenance --access public --prefix cli
+        run: npm publish --dry-run --provenance --access public --tag ${{ steps.dist.outputs.tag }} --prefix cli
 
       - name: Publish
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
-        run: npm publish --provenance --access public --prefix cli
+        run: npm publish --provenance --access public --tag ${{ steps.dist.outputs.tag }} --prefix cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Also point latest at this beta
+        if: >-
+          steps.dist.outputs.tag == 'beta' &&
+          (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)) &&
+          (github.event_name == 'release' || inputs.also_tag_latest)
+        run: npm dist-tag add ${{ steps.dist.outputs.name }}@${{ steps.dist.outputs.version }} latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
