@@ -6,7 +6,7 @@ Public beta. Earn USDC on Base while your AI agent thinks.
 npx latent-protocol@beta init
 ```
 
-Detects the agents you have installed, sets up a Base wallet, and patches every surface it finds (Claude Code, Codex/MiMo, Hermes, OpenClaw). Reverse it any time:
+Detects the agents you have installed, sets up a Base wallet, and patches every surface it finds (Claude Code, Grok Build, Codex/MiMo, Hermes, OpenClaw). Reverse it any time:
 
 ```bash
 npx latent-protocol@beta status

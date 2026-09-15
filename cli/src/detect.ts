@@ -8,9 +8,12 @@ import {
   CODEX_AGENTS,
   codexDetected,
 } from "./surfaces/codex.js";
+import { grokDetected, grokHome } from "./surfaces/grok.js";
 
 export interface DetectedAgents {
   claudeCode: boolean;
+  grok: boolean;
+  grokBin: boolean;
   hermes: boolean;
   hermesBin: boolean;
   hermesWebui: boolean;
@@ -20,6 +23,8 @@ export interface DetectedAgents {
   openclawBin: boolean;
   paths: {
     claudeSettings: string;
+    grokHome: string;
+    grokConfig: string;
     hermesHome: string;
     hermesPlugins: string;
     openclawHome: string;
@@ -336,9 +341,13 @@ export function detectAgents(): DetectedAgents {
   const hermesWebuiStatic = findHermesWebuiStatic(home);
   const hermesBin = Boolean(which("hermes"));
   const openclawBin = Boolean(which("openclaw"));
+  const grokDir = grokHome(home);
+  const grokBin = Boolean(which("grok"));
 
   return {
     claudeCode: existsSync(claudeDir),
+    grok: grokDetected(home),
+    grokBin,
     hermes: existsSync(hermesHome) || hermesBin,
     hermesBin,
     hermesWebui: Boolean(hermesWebuiStatic),
@@ -348,6 +357,8 @@ export function detectAgents(): DetectedAgents {
     openclawBin,
     paths: {
       claudeSettings: join(claudeDir, "settings.json"),
+      grokHome: grokDir,
+      grokConfig: join(grokDir, "config.toml"),
       hermesHome,
       hermesPlugins: join(hermesHome, "plugins"),
       openclawHome,
@@ -368,6 +379,11 @@ export function formatDetectionTable(d: DetectedAgents): string {
       "Claude Code",
       d.claudeCode ? "detected" : "not found",
       d.paths.claudeSettings,
+    ],
+    [
+      "Grok Build",
+      d.grok ? (d.grokBin ? "detected+bin" : "detected") : "not found",
+      d.paths.grokConfig,
     ],
     [
       "Hermes",
@@ -407,6 +423,7 @@ export function formatSurfaceMatrix(d: DetectedAgents): string {
     `  • Hermes Desktop (\`hermes desktop\`):          ${d.hermes ? "same agent-ads plugin + status-bar chip" : "skipped"}`,
     `  • Hermes WebUI (browser / Tailscale):         ${webui}`,
     `  • Claude Code:                                ${d.claudeCode ? "statusLine" : "skipped"}`,
+    `  • Grok Build:                                 ${d.grok ? "status line (config.toml)" : "skipped"}`,
     `  • OpenClaw (WA/TG/Slack/…):                   ${d.openclaw ? "plugin latent-protocol" : "skipped"}`,
     ...CODEX_AGENTS.filter(codexDetected).map(
       (a) => `  • ${a.name.padEnd(11)} (turn hooks hooks.json):          installed on init`,

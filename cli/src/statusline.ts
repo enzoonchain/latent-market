@@ -8,6 +8,12 @@ import {
   resolveServer,
   resolveWallet,
 } from "./config.js";
+
+/** Override the billed agent (Grok sets LATENT_AGENT=grok on the command line). */
+function billedAgent(): string {
+  const raw = process.env.LATENT_AGENT?.trim();
+  return raw || AGENT_CLAUDE_CODE;
+}
 import { randomUUID } from "node:crypto";
 import { logImpression, requestAd, type Ad } from "./api.js";
 import { classifyPrompt } from "./classify.js";
@@ -215,7 +221,7 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
   const ad = await requestAd({
     wallet,
     context: contextFromSession(session),
-    agent: AGENT_CLAUDE_CODE,
+    agent: billedAgent(),
     surface: "status_line",
     server,
   });

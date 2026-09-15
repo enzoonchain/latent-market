@@ -42,6 +42,7 @@ GitHub fallback (no registry): `npx github:enzoonchain/latent-market init`.
 | Agent | How the ad is delivered | Where |
 |-------|------------------------|-------|
 | **Claude Code** | `statusLine` + turn hooks (local `node` bundles, no `npx` at runtime); `spinnerVerbs` thinking-shimmer line on CC ≥ 2.1.143 | [`cli/src/surfaces/claude-code.ts`](cli/src/surfaces/claude-code.ts) |
+| **Grok Build** | `[ui.status_line]` command in `~/.grok/config.toml` (same staged `statusline.mjs`; restart Grok to apply) | [`cli/src/surfaces/grok.ts`](cli/src/surfaces/grok.ts) |
 | **Codex / MiMo** | turn hooks in `hooks.json` (local `node` bundle, no `npx` at runtime) | [`cli/src/surfaces/codex.ts`](cli/src/surfaces/codex.ts) |
 | **OpenClaw** | plugin — thinking state + footer | [`openclaw-plugin/`](openclaw-plugin/) |
 | **Hermes** (CLI, gateway, WebUI) | pip plugin + WebUI DOM patch | [`cli/src/surfaces/hermes.ts`](cli/src/surfaces/hermes.ts) |

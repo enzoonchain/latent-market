@@ -21,6 +21,7 @@ import {
   installClaudeCode,
   uninstallClaudeCode,
 } from "./surfaces/claude-code.js";
+import { grokStatus, installGrok, uninstallGrok } from "./surfaces/grok.js";
 import { detectSpinnerVerbsSupport } from "./surfaces/claude-cli-version.js";
 import { hermesStatus, installHermes, uninstallHermes } from "./surfaces/hermes.js";
 import {
@@ -57,8 +58,8 @@ Commands:
   prelaunch    Pre-launch signup: wallet + local scan + register (ads OFF)
   activate     Enable ads and patch surfaces (after public launch)
   status       Show config, balance, and patched surfaces
-  uninstall    Revert Claude Code + Hermes + OpenClaw + Codex/MiMo patches
-  statusline   Claude Code statusLine renderer (stdin → stdout)
+  uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + Codex/MiMo patches
+  statusline   Claude Code / Grok status-line renderer (stdin → stdout)
   hook         Turn-lifecycle hook runtime (invoked by installed hooks)
 
 Surfaces auto-installed when detected:
@@ -66,6 +67,7 @@ Surfaces auto-installed when detected:
   • Hermes WebUI — DOM patch (static/index.html)
   • Claude Code — statusLine + turn hooks (staged to ~/.latent-protocol/bin, run via node)
                   + spinnerVerbs thinking-shimmer line on CC >= 2.1.143
+  • Grok Build — status line in ~/.grok/config.toml (same staged statusline.mjs)
   • OpenClaw — thinking + footer plugin
   • Codex / MiMo — turn hooks in hooks.json (staged bundle, run via node)
   • Cursor / VS Code — extension (see vscode-extension/)
@@ -116,11 +118,12 @@ async function cmdInit(args: string[]): Promise<void> {
     detected.hermes ||
     detected.hermesWebui ||
     detected.openclaw ||
+    detected.grok ||
     codexAgents.length > 0;
 
   if (!anyAgent) {
     console.log(
-      "No Claude Code / Hermes / Hermes WebUI / OpenClaw / Codex / MiMo install found.\n" +
+      "No Claude Code / Grok / Hermes / Hermes WebUI / OpenClaw / Codex / MiMo install found.\n" +
         "Install an agent first, or pass --yes to still create a wallet/config.",
     );
     if (!flags.yes && !flags.generate && !flags.wallet) {
@@ -148,6 +151,10 @@ async function cmdInit(args: string[]): Promise<void> {
   if (detected.claudeCode) {
     const spinnerVerbs = await detectSpinnerVerbsSupport();
     console.log(installClaudeCode({ spinnerVerbs }));
+    console.log();
+  }
+  if (detected.grok) {
+    console.log(installGrok());
     console.log();
   }
   if (detected.hermes || detected.hermesWebui) {
@@ -198,6 +205,7 @@ async function cmdStatus(): Promise<void> {
   console.log();
   console.log("Surfaces:");
   console.log(`  ${claudeCodeStatus()}`);
+  console.log(`  ${grokStatus()}`);
   console.log(`  ${hermesStatus()}`);
   console.log(`  ${openclawStatus()}`);
   for (const line of codexFamilyStatus()) console.log(`  ${line}`);
@@ -210,6 +218,7 @@ async function cmdStatus(): Promise<void> {
 
 async function cmdUninstall(): Promise<void> {
   console.log(uninstallClaudeCode());
+  console.log(uninstallGrok());
   console.log(uninstallHermes());
   console.log(uninstallOpenclaw());
   console.log(uninstallCodexFamily());
