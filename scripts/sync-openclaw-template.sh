@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync OpenClaw plugin into cli/templates so `npx latent-protocol` can install it
+# Sync OpenClaw plugin into cli/templates so `npx latent-market` can install it
 # without needing the monorepo sibling path.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -39,9 +39,9 @@ if [[ -d "$SRC/skills" ]]; then
 fi
 # Tiny README so the template is self-describing
 cat > "$DEST/README.md" <<'EOF'
-Bundled OpenClaw plugin for `npx github:enzoonchain/latent-protocol init`
-(shortens to `npx latent-protocol init` once published to npm).
-Source of truth: `/openclaw-plugin` in the latent-protocol repo.
+Bundled OpenClaw plugin for `npx github:enzoonchain/latent-market init`
+(shortens to `npx latent-market init` once published to npm).
+Source of truth: `/openclaw-plugin` in the latent-market repo.
 EOF
 
 echo "Synced OpenClaw plugin → $DEST"

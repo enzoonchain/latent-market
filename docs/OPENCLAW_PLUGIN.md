@@ -77,7 +77,7 @@ latent-protocol/
   "description": "Earn USDC from sponsored ads while your agent thinks. Open ad marketplace for AI agents on Base.",
   "author": "Latent Protocol",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/enzoonchain/latent-protocol",
+  "homepage": "https://github.com/enzoonchain/latent-market",
   "openclaw": {
     "minVersion": "2024.1.0",
     "hooks": [
@@ -210,8 +210,8 @@ openclaw gateway restart
 ### For Developers
 
 ```bash
-git clone https://github.com/enzoonchain/latent-protocol.git
-cd latent-protocol
+git clone https://github.com/enzoonchain/latent-market.git
+cd latent-market
 openclaw plugins install ./openclaw-plugin --link
 openclaw plugins enable latent-protocol
 openclaw config set skills.entries.latent-protocol.config.wallet "0xYOUR_WALLET"

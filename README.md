@@ -1,4 +1,4 @@
-# Latent Protocol — Client SDK & Platform Adapters
+# Latent Market — Client SDK & Platform Adapters
 
 > Earn USDC on Base while your AI agent thinks.
 
@@ -23,12 +23,11 @@ supported, adding it is a self-contained piece of work — see
 ## Install
 
 ```bash
-npx github:enzoonchain/latent-protocol init
+npx github:enzoonchain/latent-market init
 ```
 
-`latent-protocol` is not on the npm registry yet, so `npx latent-protocol`
-resolves to an unrelated package — install straight from GitHub until it is
-published, then this shortens to `npx latent-protocol init`.
+`latent-market` is not on the npm registry yet, so install straight from
+GitHub until it is published, then this shortens to `npx latent-market init`.
 
 Publishing is wired up: the `cli/` package builds to a single dependency-free
 `dist/index.js` (esbuild, `dependencies: {}`), and
@@ -41,8 +40,8 @@ Detects the agents you have installed, sets up a wallet, and patches every
 surface it finds. Reverse it any time:
 
 ```bash
-npx github:enzoonchain/latent-protocol status      # wallet, balance, patched surfaces
-npx github:enzoonchain/latent-protocol uninstall   # revert every patch
+npx github:enzoonchain/latent-market status      # wallet, balance, patched surfaces
+npx github:enzoonchain/latent-market uninstall   # revert every patch
 ```
 
 ## Supported surfaces
@@ -103,7 +102,7 @@ node --test cli/tests/*.test.mjs         # CLI + surface patchers
 ## Configuration
 
 Client config lives in `~/.latent-protocol/config.json`, written by
-`npx latent-protocol init`. Environment variables override it — see
+`npx latent-market init`. Environment variables override it — see
 [`.env.example`](.env.example).
 
 ## License

@@ -1,13 +1,13 @@
 name: Publish CLI to npm
 
-# Publishes `cli/` (package `latent-protocol`) to the npm registry.
+# Publishes `cli/` (package `latent-market`) to the npm registry.
 #
 # Trigger: a GitHub Release whose tag is `cli-v<semver>` (e.g. cli-v0.1.4), or a
 # manual run. The tag version must match cli/package.json's version or the job
 # fails before publishing.
 #
 # Requires repo secret NPM_TOKEN — an npm automation token with publish rights
-# on `latent-protocol`. Provenance is attested via OIDC (id-token: write).
+# on `latent-market`. Provenance is attested via OIDC (id-token: write).
 
 on:
   release:
