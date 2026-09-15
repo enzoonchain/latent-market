@@ -28,7 +28,7 @@ const PLUGIN_NAME = "agent-ads";
 // supported artifact; this tracks `main` of the public repo so unreleased
 // fixes are still installable. Never pin a feature branch here — a branch
 // that gets deleted or merged away breaks every Hermes install in the field.
-const GIT_PIP = "git+https://github.com/enzoonchain/latent-protocol.git@main";
+const GIT_PIP = "git+https://github.com/enzoonchain/latent-market.git@main";
 
 function templateDir(): string {
   return templatePath("hermes-plugin");

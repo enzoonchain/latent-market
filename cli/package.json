@@ -1,7 +1,7 @@
 {
-  "name": "latent-protocol",
+  "name": "latent-market",
   "version": "0.1.3",
-  "description": "Latent Protocol — one-line installer for Claude Code + Hermes sponsored ads",
+  "description": "Latent Market — one-line installer for Claude Code + Hermes sponsored ads",
   "type": "module",
   "bin": {
     "latent": "./dist/index.js",
@@ -32,11 +32,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/enzoonchain/latent-protocol.git",
+    "url": "https://github.com/enzoonchain/latent-market.git",
     "directory": "cli"
   },
   "license": "Apache-2.0",
   "keywords": [
+    "latent-market",
     "latent-protocol",
     "claude-code",
     "hermes",
