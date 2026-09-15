@@ -87,9 +87,18 @@ export async function startDeviceAuth(
   });
   const body = (await readJson(res)) as Partial<DeviceStart> & { error?: string };
   if (!res.ok) {
-    if (res.status === 403 || body.error === "device_auth_not_enabled") {
+    // Only Privy's own code means the dashboard toggle. A bare 403 is just as
+    // likely a proxy, a network policy or a WAF between here and Privy, and
+    // sending that user to flip a setting that is already on wastes their time.
+    if (body.error === "device_auth_not_enabled") {
       throw new Error(
         "Privy CLI/agent access is off. Enable it in the Privy Dashboard (Authentication → Advanced) or use --email / --wallet.",
+      );
+    }
+    if (res.status === 403) {
+      throw new Error(
+        "auth.privy.io refused the request (403). If you are behind a proxy or VPN, that is the likely cause; " +
+          "otherwise check that CLI/agent access is on in the Privy Dashboard. Or use --email / --wallet.",
       );
     }
     throw new Error(`device_authorization HTTP ${res.status}`);
