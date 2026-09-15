@@ -22,28 +22,20 @@ supported, adding it is a self-contained piece of work — see
 
 ## Install
 
-```bash
-npx github:enzoonchain/latent-protocol init
-```
-
-`latent-protocol` is not on the npm registry yet, so `npx latent-protocol`
-resolves to an unrelated package — install straight from GitHub until it is
-published, then this shortens to `npx latent-protocol init`.
-
-Publishing is wired up: the `cli/` package builds to a single dependency-free
-`dist/index.js` (esbuild, `dependencies: {}`), and
-[`.github/workflows/publish.yml`](.github/workflows/publish.yml) pushes it to
-npm with provenance on a `cli-v*` GitHub Release (needs the `NPM_TOKEN` repo
-secret). Until then `init` still installs from GitHub; only the runtime
-surfaces (status line, turn hooks) already run as local `node` bundles.
-
-Detects the agents you have installed, sets up a wallet, and patches every
-surface it finds. Reverse it any time:
+Public beta (`0.1.4-beta.1` on the `beta` dist-tag; `latest` currently points at the same version). Ads run against the Base Sepolia ad server — not a mainnet launch.
 
 ```bash
-npx github:enzoonchain/latent-protocol status      # wallet, balance, patched surfaces
-npx github:enzoonchain/latent-protocol uninstall   # revert every patch
+npx latent-protocol@beta init
 ```
+
+`npx latent-protocol init` also works while `latest` tracks this beta. Detects the agents you have installed, sets up a wallet, and patches every surface it finds. Reverse it any time:
+
+```bash
+npx latent-protocol@beta status      # wallet, balance, patched surfaces
+npx latent-protocol@beta uninstall   # revert every patch
+```
+
+GitHub fallback (no registry): `npx github:enzoonchain/latent-market init`.
 
 ## Supported surfaces
 

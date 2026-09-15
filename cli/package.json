@@ -1,7 +1,7 @@
 {
   "name": "latent-protocol",
-  "version": "0.1.3",
-  "description": "Latent Protocol — one-line installer for Claude Code + Hermes sponsored ads",
+  "version": "0.1.4-beta.1",
+  "description": "Latent Protocol (public beta) — earn USDC while your AI agent thinks",
   "type": "module",
   "bin": {
     "latent": "./dist/index.js",
@@ -10,7 +10,9 @@
   "files": [
     "dist/index.js",
     "dist/claude",
-    "templates"
+    "templates",
+    "LICENSE",
+    "README.md"
   ],
   "engines": {
     "node": ">=18"
@@ -30,17 +32,27 @@
     "typescript": "^5.7.0",
     "viem": "^2.21.0"
   },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/enzoonchain/latent-protocol.git",
+    "url": "git+https://github.com/enzoonchain/latent-market.git",
     "directory": "cli"
+  },
+  "homepage": "https://www.latentprotocol.xyz",
+  "bugs": {
+    "url": "https://github.com/enzoonchain/latent-market/issues"
   },
   "license": "Apache-2.0",
   "keywords": [
     "latent-protocol",
+    "latent-market",
     "claude-code",
     "hermes",
     "x402",
-    "ads"
+    "ads",
+    "base"
   ]
 }
