@@ -140,3 +140,13 @@ test("resolveSession posts the access token", async () => {
   const out = await resolveSession("https://api.example", "tok", fetchImpl);
   assert.equal(out.privy_user_id, "did:privy:tok");
 });
+
+test("startDeviceAuth only blames the dashboard when Privy says so", async () => {
+  // A bare 403 is more often a proxy or a WAF than the dashboard toggle.
+  const proxied = async () => jsonRes(403, { message: "Forbidden" });
+  await assert.rejects(() => startDeviceAuth("clid", proxied), (err) => {
+    assert.match(err.message, /proxy or VPN/);
+    assert.doesNotMatch(err.message, /access is off/);
+    return true;
+  });
+});
