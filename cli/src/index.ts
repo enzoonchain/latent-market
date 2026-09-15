@@ -44,17 +44,17 @@ function printHelp(): void {
   console.log(`latent-protocol — earn USDC while your agent thinks
 
 Usage:
-  npx latent-protocol init [--yes] [--generate] [--wallet 0x…] [--server URL]
+  npx latent-protocol init [--yes] [--wallet 0x…] [--email you@domain] [--server URL]
   npx latent-protocol status
   npx latent-protocol uninstall
   npx latent-protocol statusline [--install|--uninstall]
   npx latent-protocol hook <event> --agent <codex|claude-code|mimo>
-  npx latent-protocol prelaunch [--yes] [--generate] [--wallet 0x…] [--days 30]
+  npx latent-protocol prelaunch [--yes] [--wallet 0x…] [--email you@domain] [--days 30]
   npx latent-protocol activate
   npx latent-protocol help
 
 Commands:
-  init         Detect agents, set up wallet, patch every found surface
+  init         Detect agents, bind a Privy/existing wallet, patch every found surface
   prelaunch    Pre-launch signup: wallet + local scan + register (ads OFF)
   activate     Enable ads and patch surfaces (after public launch)
   status       Show config, balance, and patched surfaces
@@ -78,12 +78,14 @@ function parseFlags(args: string[]): {
   yes: boolean;
   generate: boolean;
   wallet?: string;
+  email?: string;
   server?: string;
   rest: string[];
 } {
   let yes = false;
   let generate = false;
   let wallet: string | undefined;
+  let email: string | undefined;
   let server: string | undefined;
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -94,6 +96,10 @@ function parseFlags(args: string[]): {
       wallet = args[++i];
     } else if (a.startsWith("--wallet=")) {
       wallet = a.slice("--wallet=".length);
+    } else if (a === "--email") {
+      email = args[++i];
+    } else if (a.startsWith("--email=")) {
+      email = a.slice("--email=".length);
     } else if (a === "--server") {
       server = args[++i];
     } else if (a.startsWith("--server=")) {
@@ -102,7 +108,7 @@ function parseFlags(args: string[]): {
       rest.push(a);
     }
   }
-  return { yes, generate, wallet, server, rest };
+  return { yes, generate, wallet, email, server, rest };
 }
 
 async function cmdInit(args: string[]): Promise<void> {
@@ -126,7 +132,7 @@ async function cmdInit(args: string[]): Promise<void> {
       "No Claude Code / Grok / Hermes / Hermes WebUI / OpenClaw / Codex / MiMo install found.\n" +
         "Install an agent first, or pass --yes to still create a wallet/config.",
     );
-    if (!flags.yes && !flags.generate && !flags.wallet) {
+    if (!flags.yes && !flags.generate && !flags.wallet && !flags.email) {
       process.exitCode = 1;
       return;
     }
@@ -136,6 +142,8 @@ async function cmdInit(args: string[]): Promise<void> {
     yes: flags.yes,
     generate: flags.generate,
     wallet: flags.wallet,
+    email: flags.email,
+    server: flags.server,
   });
   const server = flags.server
     ? canonicalizeServer(flags.server)
@@ -175,7 +183,8 @@ async function cmdInit(args: string[]): Promise<void> {
   console.log(formatSurfaceMatrix(after));
   console.log();
   console.log("🎉 Done. Earn USDC while your agent thinks.");
-  console.log("   Check: npx latent-protocol status");
+  console.log("   Cash out: https://www.latentprotocol.xyz/dashboard");
+  console.log("   Check:    npx latent-protocol status");
 }
 
 async function cmdStatus(): Promise<void> {
@@ -186,6 +195,8 @@ async function cmdStatus(): Promise<void> {
   console.log("Latent Protocol status\n");
   console.log(`  Config:  ${configFile()}`);
   console.log(`  Wallet:  ${wallet || "(not set)"}`);
+  if (cfg.auth) console.log(`  Auth:    ${cfg.auth}`);
+  if (cfg.privy_user_id) console.log(`  Privy:   ${cfg.privy_user_id}`);
   console.log(`  Server:  ${server}`);
   console.log(`  Enabled: ${cfg.enabled === false ? "false" : "true"}`);
   console.log(`  Mode:    ${cfg.mode ?? "live"}`);
@@ -281,6 +292,7 @@ async function cmdPrelaunch(args: string[]): Promise<void> {
     yes: flags.yes,
     generate: flags.generate,
     wallet: flags.wallet,
+    email: flags.email,
     server: flags.server,
     days,
     skipRegister,

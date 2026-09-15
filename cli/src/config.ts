@@ -120,6 +120,10 @@ export interface LatentConfig {
   spinner_verbs?: boolean;
   /** ISO timestamp when POST /prelaunch/register succeeded. */
   prelaunch_registered_at?: string;
+  /** Privy user id when the wallet was provisioned via auth link / email. */
+  privy_user_id?: string;
+  /** How the wallet was bound: privy | address | generated */
+  auth?: string;
 }
 
 export function loadConfig(): LatentConfig {

@@ -54,14 +54,15 @@ test("the bundled CLI runs", () => {
   assert.match(out, /init/);
 });
 
-test("the bundled CLI generates a wallet (viem is inlined)", () => {
+test("the bundled CLI binds --wallet without hitting the network (viem still inlined for --generate)", () => {
   const home = mkdtempSync(join(tmpdir(), "latent-bundle-"));
+  const wallet = "0x7331003C29a8Db67E141dD39964B205598b60bcf";
   const out = execFileSync(
     process.execPath,
-    [dist("index.js"), "prelaunch", "--generate", "--skip-register", "--yes"],
+    [dist("index.js"), "prelaunch", "--wallet", wallet, "--skip-register", "--yes"],
     { encoding: "utf8", env: { ...process.env, HOME: home } },
   );
-  assert.match(out, /0x[0-9a-fA-F]{40}/, "no wallet address in prelaunch output");
+  assert.match(out, /0x7331003C29a8Db67E141dD39964B205598b60bcf/, "no wallet address in prelaunch output");
 });
 
 test("the bundled CLI's `init` stages the runtime — asset paths survive bundling", () => {
@@ -75,7 +76,7 @@ test("the bundled CLI's `init` stages the runtime — asset paths survive bundli
 
   const out = execFileSync(
     process.execPath,
-    [dist("index.js"), "init", "--yes", "--generate"],
+    [dist("index.js"), "init", "--yes", "--wallet", "0x7331003C29a8Db67E141dD39964B205598b60bcf"],
     { encoding: "utf8", env: { ...process.env, HOME: home } },
   );
   assert.doesNotMatch(out, /runtime bundle missing/, out);
