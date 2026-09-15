@@ -14,7 +14,7 @@ npx github:enzoonchain/latent-protocol init
 resolves to an unrelated package — use the GitHub form above until it is
 published, then this shortens to `npx latent-protocol init`.
 
-Detects Claude Code / Hermes / Hermes WebUI / OpenClaw, sets up a wallet, and
+Detects Claude Code / Grok Build / Hermes / Hermes WebUI / OpenClaw, sets up a wallet, and
 patches every surface it finds (CLI plugin, WebUI DOM patch, statusLine, OpenClaw plugin).
 See the [dev plan](DEV_PLAN_NPX_HERMES.md) for architecture details.
 
@@ -153,6 +153,7 @@ not Hermes `ads.wallet` keys. Prefer `latent-setup` or `/ads setup` in chat.
 | WebUI banner + footer | DOM patch via `latent-hermes-patch` (WebUI does **not** load Hermes plugins) | ✅ via `npx init` when `static/` is found |
 | OpenClaw (WA/TG/Slack/…) | TS plugin thinking + footer | ✅ via `npx init` when `~/.openclaw` / `openclaw` found |
 | Claude Code | statusLine | ✅ via `npx init` |
+| Grok Build | `[ui.status_line]` command in `~/.grok/config.toml` | ✅ via `npx init` (restart Grok) |
 
 ### Hermes Desktop
 

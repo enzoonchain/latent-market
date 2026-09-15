@@ -26,6 +26,9 @@ export function canonicalizeServer(url: string): string {
  */
 export const AGENT_CLAUDE_CODE = "claude-code";
 
+/** Host-agent identifier for Grok Build's status-line surface. */
+export const AGENT_GROK = "grok";
+
 /** Resolved at call time so HOME overrides (tests / sudo) are respected. */
 export function configDir(): string {
   return join(homedir(), ".latent-protocol");

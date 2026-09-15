@@ -12,6 +12,7 @@ import {
   installCodexFamily,
 } from "./surfaces/codex.js";
 import { installClaudeCode } from "./surfaces/claude-code.js";
+import { installGrok } from "./surfaces/grok.js";
 import { formatDetectionTable, formatSurfaceMatrix } from "./detect.js";
 
 export interface PrelaunchOpts extends WalletOpts {
@@ -107,6 +108,7 @@ export async function runActivate(): Promise<void> {
   const lines: string[] = [];
 
   if (detected.claudeCode) lines.push(installClaudeCode());
+  if (detected.grok) lines.push(installGrok());
   if (detected.hermes || detected.hermesWebui) lines.push(installHermes());
   if (detected.openclaw) lines.push(installOpenclaw());
   if (codexAgents.length > 0) lines.push(installCodexFamily());

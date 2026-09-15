@@ -15,6 +15,7 @@ import {
   SPINNER_TAGLINE,
   isOurSpinnerVerbs,
 } from "./claude-spinner.js";
+import { grokPatched } from "./grok.js";
 
 /**
  * Legacy statusLine commands we still recognise so a re-install or `uninstall`
@@ -128,6 +129,8 @@ function stageRuntime(): string | null {
 }
 
 function cleanRuntimeDir(): void {
+  // Grok reuses statusline.mjs — don't yank it out from under a live row.
+  if (grokPatched()) return;
   for (const name of Object.keys(RUNTIME_FILES) as RuntimeName[]) {
     const p = installedRuntime(name);
     if (existsSync(p)) {
