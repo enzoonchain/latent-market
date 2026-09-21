@@ -13,6 +13,7 @@ import {
 } from "./surfaces/codex.js";
 import { installClaudeCode } from "./surfaces/claude-code.js";
 import { installGrok } from "./surfaces/grok.js";
+import { installMimo } from "./surfaces/mimo.js";
 import { formatDetectionTable, formatSurfaceMatrix } from "./detect.js";
 
 export interface PrelaunchOpts extends WalletOpts {
@@ -113,6 +114,7 @@ export async function runActivate(): Promise<void> {
   if (detected.hermes || detected.hermesWebui) lines.push(installHermes());
   if (detected.openclaw) lines.push(installOpenclaw());
   if (codexAgents.length > 0) lines.push(installCodexFamily());
+  if (detected.mimo) lines.push(installMimo());
 
   if (!lines.length) {
     console.log("No supported agents detected to patch.");

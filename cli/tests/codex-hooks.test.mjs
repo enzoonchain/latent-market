@@ -1,5 +1,5 @@
 /**
- * Codex / MiMo turn hooks:
+ * Codex turn hooks:
  *   - official Codex event names only (UserPromptSubmit / Stop, never TurnStart)
  *   - a LOCAL `node <bundle>` command, never `npx` (the command runs every turn)
  *   - hooks.json edits are parse-guarded, backed up, and migrate legacy npx
@@ -18,9 +18,9 @@ import { join } from "node:path";
 
 const { readSettings } = await import("../dist/surfaces/json-settings.js");
 
-/** Fresh sandbox: $HOME + CODEX_HOME/MIMO_HOME under a tmp dir. Returns the
- *  codex surface module (paths resolve lazily via env, so a fresh import per
- *  test keeps them isolated). */
+/** Fresh sandbox: $HOME + CODEX_HOME under a tmp dir. Returns the codex
+ *  surface module (paths resolve lazily via env, so a fresh import per test
+ *  keeps them isolated). */
 async function sandbox() {
   const home = mkdtempSync(join(tmpdir(), "latent-codex-"));
   process.env.HOME = home;
@@ -76,7 +76,7 @@ test("install writes official events as local node commands, never npx", async (
 
     for (const ev of ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]) {
       const cmd = cfg.hooks[ev][0].hooks[0].command;
-      assert.match(cmd, /codex-hook\.mjs" \S+ --agent (codex|mimo)$/, `${a.id}: ${ev} command`);
+      assert.match(cmd, /codex-hook\.mjs" \S+ --agent codex$/, `${a.id}: ${ev} command`);
       assert.ok(cmd.includes(`--agent ${a.id}`));
     }
     assert.equal(cfg.hooks.TurnStart, undefined, "TurnStart is not a real Codex event");
@@ -133,18 +133,14 @@ test("uninstall restores from the pristine backup", async () => {
   assert.ok(!existsSync(p + ".latent-protocol.bak"));
 });
 
-test("shared staged hook: removed only when neither agent uses it", async () => {
+test("staged hook: cleaned up once the sole Codex-family agent uninstalls", async () => {
   const { home, mod } = await sandbox();
-  const [codex, mimo] = mod.CODEX_AGENTS;
+  const codex = mod.CODEX_AGENTS[0];
   mod.installCodexAgent(codex);
-  mod.installCodexAgent(mimo);
   const staged = join(home, ".latent-protocol", "bin", "codex-hook.mjs");
   assert.ok(existsSync(staged));
 
   mod.uninstallCodexAgent(codex);
-  assert.ok(existsSync(staged), "staged hook removed while MiMo still uses it");
-
-  mod.uninstallCodexAgent(mimo);
   assert.ok(!existsSync(staged), "staged hook not cleaned after last agent");
 });
 
@@ -163,7 +159,7 @@ test("the staged codex-hook bundle runs and surfaces a sponsor line", async () =
     const r = await runNode(staged, ["turn-start", "--agent", "codex"],
       JSON.stringify({ prompt: "write a python etl job" }));
     assert.equal(r.code, 0, r.err);
-    // Codex/MiMo get the sponsor line through the hook's additionalContext.
+    // Codex gets the sponsor line through the hook's additionalContext.
     assert.match(r.out, /additionalContext/);
     assert.match(r.out, /codex sponsor body/);
   } finally {

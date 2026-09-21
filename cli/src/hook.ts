@@ -1,7 +1,7 @@
 /**
  * Turn-hook runtime — the logic the installed lifecycle hooks invoke.
  *
- *   latent hook <event> --agent <codex|claude-code|mimo> [< payload.json]
+ *   latent hook <event> --agent <codex|claude-code> [< payload.json]
  *
  * Events (CodeBacks parity): session-start, turn-start, turn-end, session-end.
  * Flow: at turn-start we classify locally, fetch one ad by category slug, and
@@ -19,7 +19,7 @@ import { spinnerVerb, writeSpinnerVerb } from "./surfaces/claude-spinner.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 export type HookEvent = "session-start" | "turn-start" | "turn-end" | "session-end";
-export type HookAgent = "codex" | "claude-code" | "mimo";
+export type HookAgent = "codex" | "claude-code";
 
 /**
  * Agents whose hook renders the sponsor line itself, and therefore owns the
@@ -30,8 +30,12 @@ export type HookAgent = "codex" | "claude-code" | "mimo";
  * it, so the status line bills (see statusline.ts). If the hook billed too,
  * a single displayed ad would be charged to the advertiser twice, and the
  * ad the hook billed for might never have reached the screen at all.
+ *
+ * MiMo Code is also absent — it has its own native plugin surface
+ * (surfaces/mimo.ts) that talks to the ad server directly and bills its own
+ * impression; it never runs through this hooks.json-based runtime.
  */
-const HOOK_OWNS_IMPRESSION: ReadonlySet<HookAgent> = new Set<HookAgent>(["codex", "mimo"]);
+const HOOK_OWNS_IMPRESSION: ReadonlySet<HookAgent> = new Set<HookAgent>(["codex"]);
 
 /** Plain-text (no ANSI) sponsor line for context-injection hosts. Advertiser
  *  copy is sanitised here; the prompt-injection fence lives at the call site. */
@@ -200,7 +204,7 @@ export async function runHook(
         writeStatuslineCache(ad, next.sessionId);
 
         // Claude Code shows the ad via its statusLine (kept out of the model
-        // context). Codex/MiMo have no status line, so we surface the sponsor
+        // context). Codex has no status line, so we surface the sponsor
         // line through the hook's context channel.
         if (agent === "claude-code") {
           // Second surface: keep settings.json `spinnerVerbs` in sync with the

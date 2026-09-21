@@ -36,6 +36,7 @@ import {
   installCodexFamily,
   uninstallCodexFamily,
 } from "./surfaces/codex.js";
+import { installMimo, mimoStatus, uninstallMimo } from "./surfaces/mimo.js";
 import { runHook, type HookAgent, type HookEvent } from "./hook.js";
 import { runPrelaunch, runActivate } from "./prelaunch.js";
 import { DEFAULT_SCAN_DAYS } from "./scanners/types.js";
@@ -48,7 +49,7 @@ Usage:
   npx latent-protocol status
   npx latent-protocol uninstall
   npx latent-protocol statusline [--install|--uninstall]
-  npx latent-protocol hook <event> --agent <codex|claude-code|mimo>
+  npx latent-protocol hook <event> --agent <codex|claude-code>
   npx latent-protocol prelaunch [--yes] [--wallet 0x…] [--email you@domain] [--days 30]
   npx latent-protocol activate
   npx latent-protocol help
@@ -58,7 +59,7 @@ Commands:
   prelaunch    Pre-launch signup: wallet + local scan + register (ads OFF)
   activate     Enable ads and patch surfaces (after public launch)
   status       Show config, balance, and patched surfaces
-  uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + Codex/MiMo patches
+  uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + Codex + MiMo patches
   statusline   Claude Code / Grok status-line renderer (stdin → stdout)
   hook         Turn-lifecycle hook runtime (invoked by installed hooks)
 
@@ -69,7 +70,8 @@ Surfaces auto-installed when detected:
                   + spinnerVerbs thinking-shimmer line on CC >= 2.1.143
   • Grok Build — status line in ~/.grok/config.toml (same staged statusline.mjs)
   • OpenClaw — thinking + footer plugin
-  • Codex / MiMo — turn hooks in hooks.json (staged bundle, run via node)
+  • Codex — turn hooks in hooks.json (staged bundle, run via node)
+  • MiMo Code — native plugin (~/.config/mimocode/plugins), response footer
   • Cursor / VS Code — extension (see vscode-extension/)
 `);
 }
@@ -125,6 +127,7 @@ async function cmdInit(args: string[]): Promise<void> {
     detected.hermesWebui ||
     detected.openclaw ||
     detected.grok ||
+    detected.mimo ||
     codexAgents.length > 0;
 
   if (!anyAgent) {
@@ -180,6 +183,10 @@ async function cmdInit(args: string[]): Promise<void> {
     console.log(installCodexFamily());
     console.log();
   }
+  if (detected.mimo) {
+    console.log(installMimo());
+    console.log();
+  }
 
   // Re-detect after install for accurate matrix
   const after = detectAgents();
@@ -223,6 +230,7 @@ async function cmdStatus(): Promise<void> {
   console.log(`  ${hermesStatus()}`);
   console.log(`  ${openclawStatus()}`);
   for (const line of codexFamilyStatus()) console.log(`  ${line}`);
+  console.log(`  ${mimoStatus()}`);
   console.log();
   console.log("Detected:");
   console.log(formatDetectionTable(detected));
@@ -236,6 +244,7 @@ async function cmdUninstall(): Promise<void> {
   console.log(uninstallHermes());
   console.log(uninstallOpenclaw());
   console.log(uninstallCodexFamily());
+  console.log(uninstallMimo());
   resetHealth();
 }
 

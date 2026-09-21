@@ -35,13 +35,13 @@ Hermes is the strongest Python-native / Nous ecosystem surface.
 
 ## Why OpenClaw?
 
-| Feature | OpenClaw | Hermes | Claude Code | Codex/MiMo |
-|---------|----------|--------|-------------|------------|
-| **Thinking State** | ✅ `before_prompt_build` | ✅ `pre_llm_call` | ⚠️ statusLine | ❌ No |
-| **Plugin system** | ✅ Full (`api.on(...)`) | ✅ `register_hook()` | ⚠️ Hooks only | ⚠️ Skill only |
-| **Thinking injection** | ✅ `enqueueNextTurnInjection` | ✅ Context append | ⚠️ status chrome | ❌ No |
-| **Multi-channel** | ✅ 13+ (WA, TG, Slack, Discord) | ✅ Gateway (TG, Discord, …) | ❌ Terminal | ❌ Terminal |
-| **ClawHub registry** | ✅ Public skill marketplace | ❌ No | ❌ No | ❌ No |
+| Feature | OpenClaw | Hermes | Claude Code | Codex | MiMo Code |
+|---------|----------|--------|-------------|-------|-----------|
+| **Thinking State** | ✅ `before_prompt_build` | ✅ `pre_llm_call` | ⚠️ statusLine | ❌ No | ❌ No |
+| **Plugin system** | ✅ Full (`api.on(...)`) | ✅ `register_hook()` | ⚠️ Hooks only | ⚠️ Skill only | ✅ Native TS plugin |
+| **Thinking injection** | ✅ `enqueueNextTurnInjection` | ✅ Context append | ⚠️ status chrome | ❌ No | ❌ No |
+| **Multi-channel** | ✅ 13+ (WA, TG, Slack, Discord) | ✅ Gateway (TG, Discord, …) | ❌ Terminal | ❌ Terminal | ❌ Terminal |
+| **ClawHub registry** | ✅ Public skill marketplace | ❌ No | ❌ No | ❌ No | ❌ No |
 
 **OpenClaw = thinking state ad injection + multi-channel + ClawHub**
 
