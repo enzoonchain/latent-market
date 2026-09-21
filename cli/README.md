@@ -13,7 +13,7 @@ npx latent-protocol init --email you@domain     # pregenerate a wallet, claim la
 npx latent-protocol init --wallet 0x…           # use an address you already control
 ```
 
-Then it patches every agent surface it finds (Claude Code, Grok Build, Codex/MiMo, Hermes, OpenClaw). Reverse it any time:
+Then it patches every agent surface it finds (Claude Code, Grok Build, Codex, MiMo Code, Hermes, OpenClaw). Reverse it any time:
 
 ```bash
 npx latent-protocol@beta status

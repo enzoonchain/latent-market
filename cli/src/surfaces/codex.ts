@@ -1,8 +1,8 @@
 /**
- * Codex / MiMo surface — lifecycle turn hooks in the agent's hooks.json.
+ * Codex surface — lifecycle turn hooks in ~/.codex/hooks.json.
  *
- * These TUI coding agents have no status-line command hook, so we register
- * command hooks on the turn lifecycle. Each invokes a LOCAL bundle —
+ * Codex has no status-line command hook, so we register command hooks on the
+ * turn lifecycle. Each invokes a LOCAL bundle —
  * `node ~/.latent-protocol/bin/codex-hook.mjs <event> --agent <id>` — never
  * `npx`: hooks.json's command runs on every turn, and `npx …latent-protocol`
  * re-resolves (and on a cold cache re-clones + rebuilds) the package every
@@ -48,7 +48,7 @@ const HOOK_BUNDLE = distPath("claude", "hook.mjs");
 const STAGED_HOOK_NAME = "codex-hook.mjs";
 
 export interface CodexAgentDef {
-  id: "codex" | "mimo";
+  id: "codex";
   name: string;
   homeEnv: string;
   homeRel: string;
@@ -57,7 +57,6 @@ export interface CodexAgentDef {
 
 export const CODEX_AGENTS: CodexAgentDef[] = [
   { id: "codex", name: "Codex", homeEnv: "CODEX_HOME", homeRel: ".codex", binaries: ["codex"] },
-  { id: "mimo", name: "MiMo", homeEnv: "MIMO_HOME", homeRel: ".mimo", binaries: ["mimo"] },
 ];
 
 function which(bin: string): boolean {
@@ -187,7 +186,7 @@ export function uninstallCodexAgent(a: CodexAgentDef): string {
 }
 
 /** Remove the staged codex-hook.mjs only when no Codex-family agent still
- *  references it (the two agents share the one staged copy). */
+ *  references it. */
 function cleanStagedHookIfUnused(): void {
   const stillUsed = CODEX_AGENTS.some((a) => {
     const { raw } = readSettings(hooksPath(a));
@@ -215,13 +214,13 @@ export function codexStatus(a: CodexAgentDef): string {
 /** Install every detected Codex-family agent. */
 export function installCodexFamily(): string {
   const present = CODEX_AGENTS.filter(codexDetected);
-  if (!present.length) return "ℹ️  No Codex / MiMo install detected — skipped.";
+  if (!present.length) return "ℹ️  No Codex install detected — skipped.";
   return present.map(installCodexAgent).join("\n");
 }
 
 export function uninstallCodexFamily(): string {
   const present = CODEX_AGENTS.filter(codexDetected);
-  if (!present.length) return "ℹ️  No Codex / MiMo install detected; nothing to remove.";
+  if (!present.length) return "ℹ️  No Codex install detected; nothing to remove.";
   return present.map(uninstallCodexAgent).join("\n");
 }
 

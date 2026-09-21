@@ -9,6 +9,7 @@ import {
   codexDetected,
 } from "./surfaces/codex.js";
 import { grokDetected, grokHome } from "./surfaces/grok.js";
+import { mimoConfigDir, mimoDetected } from "./surfaces/mimo.js";
 
 export interface DetectedAgents {
   claudeCode: boolean;
@@ -21,6 +22,7 @@ export interface DetectedAgents {
   hermesWebuiPatched: boolean;
   openclaw: boolean;
   openclawBin: boolean;
+  mimo: boolean;
   paths: {
     claudeSettings: string;
     grokHome: string;
@@ -29,6 +31,7 @@ export interface DetectedAgents {
     hermesPlugins: string;
     openclawHome: string;
     openclawPlugins: string;
+    mimoConfigDir: string;
     latentConfig: string;
   };
 }
@@ -355,6 +358,7 @@ export function detectAgents(): DetectedAgents {
     hermesWebuiPatched: isPatched(hermesWebuiStatic),
     openclaw: existsSync(openclawHome) || openclawBin,
     openclawBin,
+    mimo: mimoDetected(),
     paths: {
       claudeSettings: join(claudeDir, "settings.json"),
       grokHome: grokDir,
@@ -363,6 +367,7 @@ export function detectAgents(): DetectedAgents {
       hermesPlugins: join(hermesHome, "plugins"),
       openclawHome,
       openclawPlugins: join(openclawHome, "extensions"),
+      mimoConfigDir: mimoConfigDir(),
       latentConfig: join(home, ".latent-protocol", "config.json"),
     },
   };
@@ -401,6 +406,7 @@ export function formatDetectionTable(d: DetectedAgents): string {
       d.paths.openclawHome,
     ],
     ...codexFamilyDetectionRows(),
+    ["MiMo Code", d.mimo ? "detected" : "not found", d.paths.mimoConfigDir],
   ];
   return rows
     .map(
@@ -428,6 +434,7 @@ export function formatSurfaceMatrix(d: DetectedAgents): string {
     ...CODEX_AGENTS.filter(codexDetected).map(
       (a) => `  • ${a.name.padEnd(11)} (turn hooks hooks.json):          installed on init`,
     ),
+    `  • MiMo Code (native plugin):                  ${d.mimo ? "installed on init" : "skipped"}`,
     "  • Cursor / VS Code:                           extension (vscode-extension/)",
     "  • Standalone Telegram bots:                   manual wrap (see docs/PLUGIN.md)",
   ];

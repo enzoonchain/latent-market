@@ -20,7 +20,8 @@ file to change.
 | ✅ Comment-safe, parse-guarded `settings.json` edits + backup/restore | `cli/src/surfaces/json-settings.ts` | #10 |
 | ✅ `spinnerVerbs` surface, `claude --version` gated | `cli/src/surfaces/claude-spinner.ts` | #11 |
 | ✅ Whole CLI bundled, `dependencies: {}`, npm publish workflow | `cli/scripts/bundle.mjs` | #13 |
-| ✅ No runtime `npx` (Codex/MiMo) | `cli/src/surfaces/codex.ts` | #14 |
+| ✅ No runtime `npx` (Codex) | `cli/src/surfaces/codex.ts` | #14 |
+| ✅ MiMo Code split into its own native-plugin surface (was wrongly grouped with Codex's `hooks.json`) | `cli/src/surfaces/mimo.ts` | (this PR) |
 | ✅ Killswitch + local incident guard; extension esbuild bundle | `cli/src/killswitch.ts`, `vscode-extension/` | #15, #17 |
 | ✅ Ad-copy sanitisation (ANSI/control/bidi) at every render sink | `cli/src/sanitize.ts` | #18 |
 | ✅ VS Code sidebar-card XSS (`javascript:` href) + CSP + first vitest | `vscode-extension/src/card.ts`, `urlsafe.ts` | #19 |
@@ -64,7 +65,7 @@ budget debit + the daily cap. Tightening it further is P1 (session auth).
 
 | # | Issue | Fix |
 |---|---|---|
-| C1 | **Forgeable `/ad/click`** — OpenClaw footer + Python adapters build `GET /ad/click?ad=&w=`; no token. | `openclaw-plugin/src/lib/footer.ts`, `latent_protocol/tracker.py` — send the `click_token` from **S6**; add a client-side minimum-dwell floor (~15s of on-screen time) before a click is counted. |
+| C1 | **Forgeable `/ad/click`** — OpenClaw footer + Python adapters build `GET /ad/click?ad=&w=`; no token. The MiMo Code surface (`cli/templates/mimo-plugin/latent-protocol.ts`) was added after this was filed and deliberately does *not* build a click-redirect URL — it renders `cta_url` as a plain safe link and only bills the impression, to avoid adding a third surface to this exposure. Revisit once S6 ships a `click_token`. | `openclaw-plugin/src/lib/footer.ts`, `latent_protocol/tracker.py` — send the `click_token` from **S6**; add a client-side minimum-dwell floor (~15s of on-screen time) before a click is counted. |
 | C2 | **Hermes WebUI CTA href — no scheme check.** `hermes-webui-patch.ts:_adHtml` emits `<a href="${_esc(cta_url)}">`; `_esc` escapes `&<>"` only. | `cli/src/surfaces/hermes-webui-patch.ts` — gate on an `isSafeUrl` (https-only), plain text otherwise, matching `openclaw-plugin/src/lib/footer.ts`. |
 | C3 | **OpenClaw model-context injection** — `thinking-inject.ts` / `session-start.ts` put ad copy into the model prompt unfenced (Claude Code #21 fixed the hook; OpenClaw wasn't in that PR). | `openclaw-plugin/src/hooks/thinking-inject.ts`, `session-start.ts` — reuse the `fencedAdContext` pattern; better, drop ads from model context entirely (mirror the status-line-only Claude Code design). |
 | C4 | **OpenClaw raw prompt leak** — `thinking-inject.ts:48` sends `event.userMessage` verbatim as `context` (Claude Code #21 fixed the status line). | classify locally, send the slug only. |

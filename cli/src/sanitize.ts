@@ -1,7 +1,7 @@
 /**
  * Ad copy is advertiser-controlled and is rendered into a terminal status line,
- * the Claude Code thinking-shimmer, and (for Codex/MiMo) the model's own
- * context. None of those are safe sinks for raw bytes:
+ * the Claude Code thinking-shimmer, and (for Codex) the model's own context.
+ * None of those are safe sinks for raw bytes:
  *
  *   - a terminal acts on ESC / CSI / OSC sequences (move the cursor, clear the
  *     screen, set the window title, on some terminals worse),

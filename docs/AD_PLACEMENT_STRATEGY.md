@@ -11,7 +11,8 @@
 | **Hermes** | Thinking state + `pre_llm_call` | 2/5 | ✅ Igen | ✅ Plugin |
 | **Hermes Desktop** | Ugyanaz a plugin (közös `HERMES_HOME`) + status bar chip | 1/5 | ✅ Igen (footer) | ✅ Plugin (automatikus) |
 | **Claude Code** | `MessageDisplay` hook | 1/5 | ❌ Nem | ✅ Hook |
-| **Codex / MiMo** | Skill + `SessionStart` hook | 2/5 | ❌ Nem | ✅ Skill |
+| **Codex** | Skill + `SessionStart` hook | 2/5 | ❌ Nem | ✅ Skill |
+| **MiMo Code** | Natív response-footer plugin | 2/5 | ❌ Nem | ✅ Plugin |
 | **Telegram** | `wrap_response` adapter | 2/5 | N/A | ✅ Adapter |
 | **CLI** | `@adapter.inject` decorator | 2/5 | N/A | ✅ Decorator |
 | **MCP** (univerzális) | `inject_footer` tool | 3/5 | ❌ Nem | ❌ Kliens hívja |
@@ -174,7 +175,7 @@ string-interpolációval.
 
 ---
 
-## 3. Codex / MiMo Code — Skill + Hook Combo
+## 3. Codex — Skill + Hook Combo
 
 ### Miért a legjobb?
 - A **Skills** rendszer a legtermészetesebb — "developer context"-ként jelenik meg
@@ -332,7 +333,7 @@ inject_footer(text, style="markdown", context="defi")
 |-------|----------|---------|-----|
 | 1 | Hermes | Thinking state plugin | 2-3 nap |
 | 2 | Claude Code | `MessageDisplay` hook | 1-2 nap |
-| 3 | Codex/MiMo | Skill + `SessionStart` hook | 1-2 nap |
+| 3 | Codex | Skill + `SessionStart` hook | 1-2 nap |
 | 4 | Telegram | Per-user adapter | 1-2 nap |
 | 5 | CLI | Decorator | 0.5 nap |
 | 6 | MCP | Tool server (már kész) | ✅ Kész |
@@ -359,7 +360,8 @@ kikötés szerint nem lehetséges):
 | Felület | Bekötés | Fájl |
 |---|---|---|
 | **Claude Code** | statusLine + turn hookok (`SessionStart`/`UserPromptSubmit`/`Stop`/`SessionEnd`) | `~/.claude/settings.json` |
-| **Codex / MiMo** | turn hookok (`SessionStart`/`TurnStart`/`TurnEnd`/`SessionEnd`) | `~/.codex/hooks.json`, `~/.mimo/hooks.json` |
+| **Codex** | turn hookok (`SessionStart`/`UserPromptSubmit`/`Stop`/`SessionEnd`) | `~/.codex/hooks.json` |
+| **MiMo Code** | `experimental.text.complete` plugin hook | `~/.config/mimocode/plugins/latent-protocol.ts` |
 | **Cursor / VS Code** | extension: státuszsor+sidebar card (alap) + opt-in spinner-bundle patch | `vscode-extension/` |
 
 **Turn-alapú adatfolyam (CodeBacks-parity):**
