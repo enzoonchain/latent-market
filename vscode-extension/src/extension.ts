@@ -30,13 +30,14 @@ let earningsBar: EarningsStatusBar | null = null;
 let rotateTimer: ReturnType<typeof setInterval> | null = null;
 let reassertTimer: ReturnType<typeof setInterval> | null = null;
 let category: Category = "general";
-let viewTracker: ViewabilityTracker | null = null;
 
 interface LoopAd {
   text: string;
   url: string;
   adId: string;
   token: string;
+  /** Loopback /click 302-chain URL (billing + redirect). Never a raw secret. */
+  clickHref?: string;
 }
 
 function workspaceRoot(): string | undefined {
@@ -63,13 +64,13 @@ async function fetchAd(): Promise<LoopAd | null> {
   }
 }
 
-async function reportImpression(ad: LoopAd, displayedMs: number): Promise<void> {
+async function reportImpression(ad: LoopAd, displayedMs: number, surface: string): Promise<void> {
   if (!loopback || !ad.adId) return;
   try {
     await fetch(`${loopback.baseUrl}/impression`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adId: ad.adId, token: ad.token, displayedMs }),
+      body: JSON.stringify({ adId: ad.adId, token: ad.token, displayedMs, surface }),
     });
   } catch {
     /* best-effort */
@@ -79,12 +80,16 @@ async function reportImpression(ad: LoopAd, displayedMs: number): Promise<void> 
 class SponsorViewProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(view: vscode.WebviewView): void {
     view.webview.options = { enableScripts: false, localResourceRoots: [] };
+    // Per-surface tracker: the card and the status bar run concurrently and
+    // must not share one viewability state.
+    const tracker = new ViewabilityTracker(emitMetric);
     let current: LoopAd | null = null;
-    let shownAt = 0;
     const flush = () => {
       if (current) {
-        void reportImpression(current, Date.now() - shownAt);
-        viewTracker?.stop();
+        // Honest cumulative view time (not wall clock) — the server's
+        // view-time gate decides the credit.
+        void reportImpression(current, tracker.totalVisibleMs(), "card");
+        tracker.stop();
       }
       current = null;
     };
@@ -95,10 +100,9 @@ class SponsorViewProvider implements vscode.WebviewViewProvider {
       const cfg = loadConfig();
       view.webview.html = cardHtml(ad, cfg.wallet, view.webview.cspSource);
       current = ad;
-      shownAt = Date.now();
-      if (ad && viewTracker) {
-        viewTracker.impressionRendered(ad.adId);
-        viewTracker.viewable();
+      if (ad) {
+        tracker.impressionRendered(ad.adId);
+        tracker.viewable();
       }
     };
     void render();
@@ -115,26 +119,23 @@ class SponsorViewProvider implements vscode.WebviewViewProvider {
 
 async function startStatusRotation(): Promise<void> {
   if (!statusItem) return;
+  const tracker = new ViewabilityTracker(emitMetric);
   let current: LoopAd | null = null;
-  let shownAt = 0;
   const cfg = loadConfig();
   const tick = async () => {
     if (current) {
-      await reportImpression(current, Date.now() - shownAt);
-      viewTracker?.stop();
+      await reportImpression(current, tracker.totalVisibleMs(), "statusbar");
+      tracker.stop();
     }
     current = await fetchAd();
     if (current) {
-      shownAt = Date.now();
       statusItem!.text = `💡 Sponsored: ${sanitizeText(current.text, 48)}`.slice(0, 60);
       statusItem!.tooltip = isSafeHttpUrl(current.url)
         ? current.url
         : "Latent Protocol — sponsored";
       statusItem!.show();
-      if (viewTracker) {
-        viewTracker.impressionRendered(current.adId);
-        viewTracker.viewable();
-      }
+      tracker.impressionRendered(current.adId);
+      tracker.viewable();
     } else {
       statusItem!.text = "💡 Latent";
       statusItem!.show();
@@ -203,9 +204,6 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
   loopback = new Loopback("vscode", () => category);
   await loopback.start();
 
-  // Viewability tracker — all events forwarded through the loopback
-  viewTracker = new ViewabilityTracker(emitMetric);
-
   // Sponsor line (rotating)
   statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   context.subscriptions.push(statusItem);
@@ -224,8 +222,6 @@ function stopDisplay(): void {
   if (rotateTimer) clearInterval(rotateTimer);
   rotateTimer = null;
   statusItem?.hide();
-  viewTracker?.stop();
-  viewTracker = null;
   earningsBar?.stop();
   earningsBar = null;
   loopback?.stop();

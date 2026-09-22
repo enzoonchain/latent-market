@@ -10,6 +10,9 @@ import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 export interface CardAd {
   text: string;
   url: string;
+  /** Loopback /click 302-chain URL (credits the click, redirects on to the
+   * advertiser). Set by the loopback /ad route — never carries secrets. */
+  clickHref?: string;
 }
 
 export function escapeHtml(s: string): string {
@@ -21,10 +24,18 @@ export function escapeHtml(s: string): string {
 
 export function cardHtml(ad: CardAd | null, wallet: string, cspSource = ""): string {
   const w = wallet ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : "not set";
-  const link =
-    ad && isSafeHttpUrl(ad.url)
-      ? `<a href="${escapeHtml(ad.url)}" rel="noreferrer">Learn more →</a>`
-      : "";
+  // Prefer the loopback /click 302 chain (it credits the click and redirects
+  // on to the advertiser); fall back to the raw https cta_url. A link is
+  // rendered only for the loopback chain or a real `https://` URL.
+  const clickHref =
+    ad?.clickHref && ad.clickHref.startsWith("http://127.0.0.1")
+      ? ad.clickHref
+      : ad && isSafeHttpUrl(ad.url)
+        ? ad.url
+        : "";
+  const link = clickHref
+    ? `<a href="${escapeHtml(clickHref)}" rel="noreferrer">Learn more →</a>`
+    : "";
   const body = ad
     ? `<div class="ad"><div class="tag">💡 Sponsored</div><div class="txt">${escapeHtml(
         sanitizeText(ad.text, 200),

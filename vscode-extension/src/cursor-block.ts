@@ -10,6 +10,9 @@
  *
  * The block communicates ONLY with the local loopback via `sendBeacon`
  * (text/plain Blob to avoid CORS preflight from the vscode-file:// origin).
+ * Billing mirrors block.ts: exactly one signed impression per displayed
+ * creative with honest cumulative view time (the server's view-time gate
+ * decides the credit), and clicks through the loopback /click 302 chain.
  */
 
 export function buildCursorBlock(
@@ -24,7 +27,7 @@ export function buildCursorBlock(
   if (window.__latentCursorBoot) return;
   window.__latentCursorBoot = true;
   var CFG = ${cfg};
-  var el = null, cur = null, shownAt = 0, rotateTimer = null;
+  var el = null, cur = null, rotateTimer = null, billed = false;
   var viewTickTimer = null, cumulativeMs = 0, lastResume = 0;
 
   function ping(path, body) {
@@ -66,9 +69,15 @@ export function buildCursorBlock(
     } catch(e) { return null; }
   }
 
-  function reportImpression(ms) {
-    if (!cur || !cur.adId) return;
-    ping("/impression", { adId: cur.adId, token: cur.token, displayedMs: ms });
+  // Exactly one /impression per displayed creative: billable at the 10s view
+  // threshold (fires immediately), otherwise honest cumulative dwell at cycle
+  // end and the server's view-time gate decides the credit.
+  function bill() {
+    if (!cur || !cur.adId || billed) return;
+    billed = true;
+    var ms = cumulativeMs;
+    ping("/metric", { event: ms >= 10000 ? "view_threshold_met" : "error_impression", adId: cur.adId, cumulative_ms: ms });
+    ping("/impression", { adId: cur.adId, token: cur.token, displayedMs: ms, surface: "cursor" });
   }
 
   function reportViewable() {
@@ -81,11 +90,6 @@ export function buildCursorBlock(
     ping("/metric", { event: "view_tick", adId: cur.adId, cumulative_ms: cumulativeMs });
   }
 
-  function reportThresholdMet() {
-    if (!cur || !cur.adId) return;
-    ping("/metric", { event: "view_threshold_met", adId: cur.adId, cumulative_ms: cumulativeMs });
-  }
-
   function show() {
     if (!cur) return;
     var container = ensureEl();
@@ -93,7 +97,12 @@ export function buildCursorBlock(
     container.title = cur.url || "Latent Protocol";
     container.style.display = "block";
     container.onclick = function() {
-      if (cur && cur.url) window.open(cur.url, "_blank");
+      if (!cur) return;
+      // Best-effort billing twin — the window.open navigation (the loopback
+      // /click 302 chain) is the real click path.
+      ping("/click", { adId: cur.adId, surface: "cursor" });
+      var href = String(cur.clickHref || "").indexOf("http://127.0.0.1") === 0 ? cur.clickHref : cur.url;
+      if (href) window.open(href, "_blank");
     };
   }
 
@@ -103,11 +112,13 @@ export function buildCursorBlock(
 
   function rotate() {
     if (!isBusy()) { hide(); return; }
-    reportImpression(Date.now() - shownAt);
+    bill();
     fetchAd().then(function(ad) {
       cur = ad;
-      shownAt = Date.now();
+      billed = false;
+      cumulativeMs = 0;
       if (ad) {
+        ping("/metric", { event: "impression_rendered", adId: ad.adId });
         show();
         reportViewable();
         startViewTicks();
@@ -125,10 +136,7 @@ export function buildCursorBlock(
       cumulativeMs += Date.now() - lastResume;
       lastResume = Date.now();
       reportViewTick();
-      if (cumulativeMs >= 10000 && !cur._thresholdMet) {
-        cur._thresholdMet = true;
-        reportThresholdMet();
-      }
+      if (cumulativeMs >= 10000) bill();
     }, 2500);
   }
 
@@ -151,14 +159,16 @@ export function buildCursorBlock(
     if (nowBusy && !lastBusy) {
       cumulativeMs = 0;
       cur = null;
+      billed = false;
       rotate();
       rotateTimer = setInterval(rotate, Math.max(3000, CFG.rotate));
     } else if (!nowBusy && lastBusy) {
-      reportImpression(Date.now() - shownAt);
+      bill();
       stopViewTicks();
       if (rotateTimer) { clearInterval(rotateTimer); rotateTimer = null; }
       hide();
       cur = null;
+      billed = false;
       cumulativeMs = 0;
     }
     lastBusy = nowBusy;
