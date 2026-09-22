@@ -8,6 +8,11 @@
  */
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const scanner = await import("../dist/scanners/vscode.js");
 const surface = await import("../dist/surfaces/vscode.js");
@@ -70,10 +75,8 @@ test("vscodeStatus always names the surface and never throws", () => {
 });
 
 test("missing editor fails closed without touching the machine", async () => {
-  const det = scanner.detectVscode();
-  if (det.editor !== null) {
-    // Editor present: install/uninstall would hit the network or the editor
-    // CLI — covered by manual runs, not unit tests.
+  if (scanner.detectEditors().length > 0) {
+    // Editor present: covered by the fake-editor subprocess test below.
     assert.equal(surface.vscodeDetected(), true);
     return;
   }
@@ -82,5 +85,74 @@ test("missing editor fails closed without touching the machine", async () => {
     await surface.installVscode(),
     "❌ VS Code / Cursor not found — install the editor first.",
   );
-  assert.equal(await surface.uninstallVscode(), "❌ VS Code / Cursor not found.");
+  assert.match(await surface.uninstallVscode(), /nothing to remove/);
+});
+
+test("pickVsixRelease takes the newest vscode-v* release that has the VSIX (not releases/latest)", () => {
+  const asset = (name) => ({ name, browser_download_url: `https://dl/${name}` });
+  const releases = [
+    { tag_name: "cli-v0.1.5", assets: [asset("latent-protocol-0.1.5.tgz")] },
+    { tag_name: "vscode-v0.3.0", draft: true, assets: [asset(surface.VSIX_ASSET)] },
+    { tag_name: "vscode-v0.2.1", assets: [] },
+    {
+      tag_name: "vscode-v0.2.0",
+      assets: [asset(surface.VSIX_ASSET), asset(`${surface.VSIX_ASSET}.sha256`)],
+    },
+  ];
+  assert.deepEqual(surface.pickVsixRelease(releases), {
+    url: `https://dl/${surface.VSIX_ASSET}`,
+    sha256Url: `https://dl/${surface.VSIX_ASSET}.sha256`,
+    tag: "vscode-v0.2.0",
+  });
+  assert.equal(surface.pickVsixRelease(releases.slice(0, 3)), null);
+});
+
+test("release workflow uploads the asset name the CLI looks for", () => {
+  const wf = readFileSync(new URL("../../.github/workflows/vscode-release.yml", import.meta.url), "utf8");
+  assert.match(wf, new RegExp(`-o ${surface.VSIX_ASSET.replace(/\./g, "\\.")}`));
+  assert.match(wf, /startsWith\(github\.event\.release\.tag_name, 'vscode-v'\)/);
+});
+
+// Runs installVscode in a child process with a fake HOME and a fake `cursor`
+// CLI first on PATH, so no real editor is ever touched.
+function runWithFakeCursor(env) {
+  const dir = mkdtempSync(join(tmpdir(), "latent-vscode-test-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  mkdirSync(join(dir, "home", ".cursor", "extensions"), { recursive: true });
+  const log = join(dir, "calls.log");
+  writeFileSync(join(bin, "cursor"), `#!/bin/sh\necho "$@" >> "${log}"\n`, { mode: 0o755 });
+  const vsix = join(dir, "x.vsix");
+  writeFileSync(vsix, "fake-vsix-bytes");
+  const sha = createHash("sha256").update("fake-vsix-bytes").digest("hex");
+  const surfaceUrl = new URL("../dist/surfaces/vscode.js", import.meta.url).href;
+  const res = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", `const m = await import(${JSON.stringify(surfaceUrl)}); console.log(await m.installVscode());`],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        HOME: join(dir, "home"),
+        PATH: `${bin}:/usr/bin:/bin`,
+        LATENT_VSIX_URL: vsix,
+        LATENT_VSIX_SHA256: env.sha === "good" ? sha : "0".repeat(64),
+      },
+    },
+  );
+  const calls = existsSync(log) ? readFileSync(log, "utf8") : "";
+  rmSync(dir, { recursive: true, force: true });
+  return { out: res.stdout + res.stderr, calls };
+}
+
+test("installs the checksum-verified VSIX through the editor CLI", () => {
+  const { out, calls } = runWithFakeCursor({ sha: "good" });
+  assert.match(out, /Cursor: latent-protocol\.latent-protocol-vscode installed/);
+  assert.match(calls, /^--install-extension .*latent-protocol-vscode\.vsix --force$/m);
+});
+
+test("a checksum mismatch installs nothing", () => {
+  const { out, calls } = runWithFakeCursor({ sha: "bad" });
+  assert.match(out, /checksum mismatch/);
+  assert.equal(calls, "");
 });
