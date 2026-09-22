@@ -90,33 +90,26 @@ Hermes discovers plugins from a **flat** directory (`plugin.yaml` + `__init__.py
 with `register(ctx)`) or via the `hermes_agent.plugins` pip entry point.
 Plugins are **opt-in** — you must enable them.
 
-### Recommended: `npx github:enzoonchain/latent-protocol init`
+### Recommended: `npx latent-protocol init`
 
 ```bash
-npx github:enzoonchain/latent-protocol init
+npx latent-protocol init
 # or non-interactive:
 npx latent-protocol init --wallet 0x…
 ```
 
-(Shortens to `npx latent-protocol init` once the npm publish lands.)
-
-This installs the Python package, writes `~/.hermes/plugins/agent-ads/`, enables
-the plugin, and saves your wallet to `~/.latent-protocol/config.json`.
+This writes a **standalone** plugin to `~/.hermes/plugins/agent-ads/`
+(`plugin.yaml`, a stdlib-only `__init__.py`, `desktop/plugin.js`), enables it,
+and saves your wallet to `~/.latent-protocol/config.json`. No pip package is
+needed: Hermes runs from its own venv (often uv-built, with no pip), so a
+plugin that imports a pip package would fail there with
+`No module named 'latent_protocol'`.
 
 ### Manual install
 
 ```bash
-pip install latent-protocol
-# until PyPI publish lands, use:
-# pip install 'git+https://github.com/enzoonchain/latent-protocol.git'
-
-latent-setup   # writes ~/.latent-protocol/config.json
-
-# Flat plugin dir (required for directory discovery):
 mkdir -p ~/.hermes/plugins/agent-ads
-# copy plugin/plugin.yaml + plugin/__init__.py into that directory
-# (npx github:enzoonchain/latent-protocol init does this for you)
-
+# copy cli/templates/hermes-plugin/{plugin.yaml,__init__.py} into that directory
 hermes plugins enable agent-ads
 hermes gateway restart   # if you use the messaging gateway
 ```
@@ -126,58 +119,43 @@ find `plugin.yaml` one level deeper.
 
 ### Config note
 
-The adapter reads **`~/.latent-protocol/config.json`** (and `ADS_*` env vars),
-not Hermes `ads.wallet` keys. Prefer `latent-setup` or `/ads setup` in chat.
+The plugin reads **`~/.latent-protocol/config.json`** (and `ADS_*` env vars),
+not Hermes `ads.wallet` keys.
 
 ### Use /ads commands in chat
 
 ```
-/ads setup          — configure your wallet
+/ads setup                  — wallet options
 /ads setup email you@domain — get a wallet you claim with your email
-/ads setup use 0x.. — use your existing address
-/ads balance        — check USDC earnings
-/ads payout         — withdraw to your wallet
-/ads on / off       — toggle ads
-/ads settings       — view current config
+/ads setup use 0x..         — use your existing address
+/ads balance                — balance & cash-out (opens on the dashboard; payouts need a wallet signature)
+/ads on / off               — resume / pause the footer for this session
+/ads settings               — view current config
 ```
 
 ### Surfaces
 
-| Surface | Hook | Status |
-|---------|------|--------|
-| Thinking-state reserve | `pre_llm_call` (reserve only — **not billable**) | ✅ Live (Hermes ≥ fix #2820) |
-| Response footer | `transform_llm_output` + confirm on `post_llm_call` / `post_response` | ✅ Live (bill only if shown) |
-| Hermes gateway (Telegram, Discord, …) | Same `agent-ads` plugin | ✅ Same install as CLI |
-| Hermes Desktop response footer | Same `agent-ads` plugin (Desktop's `hermes serve` backend shares `HERMES_HOME` with the CLI) | ✅ Automatic — no separate install |
-| Hermes Desktop status bar | Desktop Plugin SDK (`desktop/plugin.js` in the same `agent-ads` folder) | ✅ via `npx init` when a wallet is configured |
-| WebUI banner + footer | DOM patch via `latent-hermes-patch` (WebUI does **not** load Hermes plugins) | ✅ via `npx init` when `static/` is found |
-| OpenClaw (WA/TG/Slack/…) | TS plugin thinking + footer | ✅ via `npx init` when `~/.openclaw` / `openclaw` found |
-| Claude Code | statusLine | ✅ via `npx init` |
-| Grok Build | `[ui.status_line]` command in `~/.grok/config.toml` | ✅ via `npx init` (restart Grok) |
+| Surface | How | Status |
+|---------|-----|--------|
+| Response footer (CLI, TUI, Desktop chat) | `transform_llm_output` — a labelled "Sponsored" footer; Hermes applies it before the reply is stored and delivered, so the billed impression is the one shown | ✅ |
+| Hermes gateway (Telegram, Discord, …) | Same footer, platform-formatted | ✅ Same install as CLI |
+| Hermes Desktop status bar | Desktop Plugin SDK (`desktop/plugin.js`): one sponsored line, popover with CTA + dashboard link; impression once per creative, only while the window is visible | ✅ via `npx init` when a wallet is configured |
+| WebUI banner + footer | DOM patch (WebUI does **not** load Hermes plugins) | ✅ via `npx init` when `static/` is found |
+
+`pre_llm_call` is deliberately **not** used: its return value is appended to the
+user's message and reaches only the model, never the user.
+
+Footer links go through `GET /ad/click?ad=…&w=…&t=<click_token>`: the server
+credits the click and 302s to the advertiser's stored URL.
 
 ### Hermes Desktop
 
 [Hermes Desktop](https://hermes-agent.nousresearch.com/docs/user-guide/desktop)
-is not a separate product — it's a native Electron/React shell around the
-**same** Hermes agent, running a headless `hermes serve` backend against the
-**same** `HERMES_HOME` (`~/.hermes`) and plugin directory as the CLI. That
-means:
-
-- The sponsored-footer text and the `/ads` chat command already work in
-  Desktop chat with **zero extra setup** — they're the same
-  `pre_llm_call` / `transform_llm_output` / `post_llm_call` / `post_response`
-  hooks and command registered by the `agent-ads` plugin for the CLI.
-- `npx latent-protocol init` additionally writes a native
-  [Desktop Plugin SDK](https://hermes-agent.nousresearch.com/docs/developer-guide/desktop-plugin-sdk)
-  plugin to `~/.hermes/plugins/agent-ads/desktop/plugin.js` (the "one
-  package, both SDKs" pattern — same folder as the CLI plugin). It adds a
-  status-bar chip showing your live USDC balance; clicking it opens a small
-  panel with the wallet address and a **Request payout** button. The chip
-  only appears once a wallet is configured (`/ads setup` or `latent-setup`) —
-  re-run `npx github:enzoonchain/latent-protocol init` after changing wallets, since the value is baked
-  into the file at install time.
-- Toggling ads on/off, frequency, and other settings stay on the `/ads
-  settings` chat command — same as CLI/TUI.
+runs a headless `hermes serve` backend against the **same** `HERMES_HOME`
+(`~/.hermes`) and plugin directory as the CLI, so the footer and `/ads` work in
+Desktop chat with no extra setup. The `desktop/plugin.js` in the same folder
+adds the status-bar line. Wallet and device id are baked in at install time —
+re-run `npx latent-protocol init` after changing wallets.
 
 ---
 

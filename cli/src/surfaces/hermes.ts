@@ -1,19 +1,10 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
 import { detectAgents, findHermesWebuiStatic } from "../detect.js";
-import { loadConfig, resolveServer, resolveWallet, saveConfig } from "../config.js";
+import { deviceId, loadConfig, resolveServer, resolveWallet, saveConfig } from "../config.js";
 import { isValidAddress } from "../wallet.js";
-import { packageRoot, templatePath } from "../pkg.js";
+import { templatePath } from "../pkg.js";
 import {
   ensureWebuiCspConnectExtra,
   patchWebuiCspSource,
@@ -24,12 +15,6 @@ import {
 } from "./hermes-webui-patch.js";
 
 const PLUGIN_NAME = "agent-ads";
-// Fallback install source for the Python-side Hermes plugin. PyPI is the
-// supported artifact; this tracks `main` of the public repo so unreleased
-// fixes are still installable. Never pin a feature branch here — a branch
-// that gets deleted or merged away breaks every Hermes install in the field.
-const GIT_PIP = "git+https://github.com/enzoonchain/latent-protocol.git@main";
-
 function templateDir(): string {
   return templatePath("hermes-plugin");
 }
@@ -51,178 +36,6 @@ function run(cmd: string, args: string[], opts: { cwd?: string } = {}): {
   };
 }
 
-function findPython(): string | null {
-  for (const bin of ["python3", "python"]) {
-    const res = run(bin, ["--version"]);
-    if (res.ok) return bin;
-  }
-  return null;
-}
-
-function pythonBeside(binPath: string): string | null {
-  const dirs = new Set<string>();
-  dirs.add(dirname(binPath));
-  try {
-    dirs.add(dirname(realpathSync(binPath)));
-  } catch {
-    // ignore broken symlinks
-  }
-  for (const dir of dirs) {
-    for (const name of ["python3", "python"]) {
-      const candidate = join(dir, name);
-      if (existsSync(candidate) && run(candidate, ["--version"]).ok) {
-        return candidate;
-      }
-    }
-  }
-  return null;
-}
-
-function shebangPython(binPath: string): string | null {
-  try {
-    const first = readFileSync(binPath, "utf8").split("\n")[0] ?? "";
-    if (!first.startsWith("#!")) return null;
-    const parts = first.slice(2).trim().split(/\s+/);
-    // #!/usr/bin/env python3
-    if (parts[0]?.endsWith("env") && parts[1]) {
-      const resolved = run("bash", ["-lc", `command -v ${parts[1]}`]);
-      if (resolved.ok && resolved.stdout.trim()) return resolved.stdout.trim();
-    }
-    if (parts[0] && existsSync(parts[0]) && run(parts[0], ["--version"]).ok) {
-      return parts[0];
-    }
-  } catch {
-    // binary / unreadable
-  }
-  return null;
-}
-
-/** Prefer the interpreter Hermes itself runs under (uv tool / pipx / venv). */
-function findHermesPython(): string | null {
-  const which = run("bash", ["-lc", "command -v hermes"]);
-  const hermesBin = which.ok ? which.stdout.trim() : "";
-  if (hermesBin) {
-    const beside = pythonBeside(hermesBin);
-    if (beside) return beside;
-    const fromShebang = shebangPython(hermesBin);
-    if (fromShebang) return fromShebang;
-  }
-
-  const home = process.env.HOME || homedir();
-  const candidates = [
-    join(home, ".local/share/uv/tools/hermes-agent/bin/python"),
-    join(home, ".local/share/uv/tools/hermes/bin/python"),
-    join(home, ".local/share/pipx/venvs/hermes-agent/bin/python"),
-    join(home, ".local/share/pipx/venvs/hermes/bin/python"),
-    join(home, ".hermes/hermes-agent/venv/bin/python"),
-    join(home, ".hermes/hermes-agent/venv/bin/python3"),
-    join(home, ".hermes/venv/bin/python"),
-    join(home, ".hermes/.venv/bin/python"),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate) && run(candidate, ["--version"]).ok) return candidate;
-  }
-  return null;
-}
-
-function findPip(python: string): string[] {
-  const pipModule = run(python, ["-m", "pip", "--version"]);
-  if (pipModule.ok) return [python, "-m", "pip"];
-  return [];
-}
-
-function pipInstall(
-  pip: string[],
-  args: string[],
-): { ok: boolean; label: string; stderr: string } {
-  // Plain install first (works inside venvs).
-  const strategies: { label: string; extra: string[] }[] = [
-    { label: args.join(" "), extra: [] },
-    { label: `${args.join(" ")} --user`, extra: ["--user"] },
-    {
-      label: `${args.join(" ")} --break-system-packages`,
-      extra: ["--break-system-packages"],
-    },
-  ];
-  let lastStderr = "";
-  for (const strategy of strategies) {
-    const res = run(pip[0]!, [...pip.slice(1), "install", ...strategy.extra, ...args]);
-    if (res.ok) return { ok: true, label: strategy.label, stderr: "" };
-    lastStderr = res.stderr || res.stdout || lastStderr;
-    // If it wasn't an externally-managed failure, don't keep forcing flags.
-    if (
-      !/externally-managed-environment|PEP\s*668/i.test(lastStderr) &&
-      strategy.extra.length === 0
-    ) {
-      // still try remaining strategies; PEP 668 is the common case
-    }
-  }
-  return { ok: false, label: args.join(" "), stderr: lastStderr };
-}
-
-function installWithUv(spec: string): { ok: boolean; label: string; stderr: string } {
-  if (!run("uv", ["--version"]).ok) {
-    return { ok: false, label: "uv", stderr: "uv not found" };
-  }
-  const hermesPy = findHermesPython();
-  if (hermesPy) {
-    const into = run("uv", ["pip", "install", "--python", hermesPy, spec]);
-    if (into.ok) {
-      return { ok: true, label: `uv pip install --python ${hermesPy} ${spec}`, stderr: "" };
-    }
-  }
-  const system = run("uv", ["pip", "install", "--system", spec]);
-  if (system.ok) {
-    return { ok: true, label: `uv pip install --system ${spec}`, stderr: "" };
-  }
-  return {
-    ok: false,
-    label: `uv pip install ${spec}`,
-    stderr: system.stderr || system.stdout || "",
-  };
-}
-
-function installPythonPackage(): string {
-  const pythons = [...new Set([findHermesPython(), findPython()].filter(Boolean))] as string[];
-  if (pythons.length === 0) {
-    return "⚠️  Python not found — Hermes plugin needs Python 3.10+. Skipped pip install.";
-  }
-
-  // Git checkout only: pyproject.toml at the monorepo root (sibling of cli/).
-  const repoRoot = join(packageRoot(), "..");
-  const localPyproject = join(repoRoot, "pyproject.toml");
-  const specs: { label: string; args: string[] }[] = [];
-  if (existsSync(localPyproject)) {
-    specs.push({ label: `-e ${repoRoot}`, args: ["-e", repoRoot] });
-  }
-  // PyPI first: the published release is the supported, reproducible artifact.
-  // Fall back to git main only when PyPI is unreachable or lags a fix.
-  specs.push({ label: "latent-protocol", args: ["latent-protocol"] });
-  specs.push({ label: GIT_PIP, args: [GIT_PIP] });
-
-  let lastErr = "";
-  for (const python of pythons) {
-    const pip = findPip(python);
-    if (pip.length === 0) continue;
-    for (const spec of specs) {
-      const res = pipInstall(pip, spec.args);
-      if (res.ok) return `✅ pip (${python}): ${res.label}`;
-      lastErr = res.stderr.trim().slice(0, 240) || lastErr;
-    }
-  }
-
-  for (const spec of ["latent-protocol", GIT_PIP]) {
-    const uv = installWithUv(spec);
-    if (uv.ok) return `✅ ${uv.label}`;
-    lastErr = uv.stderr.trim().slice(0, 240) || lastErr;
-  }
-
-  return (
-    "⚠️  Could not pip install latent-protocol into Hermes/system Python. " +
-    `stderr: ${lastErr || "unknown"}`
-  );
-}
-
 /** Replaces exactly one occurrence of `token` — throws instead of silently
  * substituting the wrong spot (e.g. a stray mention in a comment) the way a
  * bare `String.replace` would. */
@@ -234,7 +47,7 @@ function templateOnce(source: string, token: string, value: string): string {
   return source.replace(token, () => value);
 }
 
-/** Templates __SERVER__/__WALLET__ into the desktop/plugin.js template with
+/** Templates __SERVER__/__WALLET__/__DEVICE_ID__ into the desktop/plugin.js template with
  * JSON.stringify (never naive string interpolation), matching the same
  * safety discipline hermes-webui-patch.ts uses for its injected JS. Written
  * beside plugin.yaml/__init__.py so the Hermes Desktop app's plugin SDK
@@ -242,7 +55,7 @@ function templateOnce(source: string, token: string, value: string): string {
  * ("one package, both SDKs" — see docs/PLUGIN.md). */
 export function writeDesktopPlugin(
   dest: string,
-  opts: { server: string; wallet: string },
+  opts: { server: string; wallet: string; deviceId?: string },
 ): string {
   const src = join(templateDir(), "desktop", "plugin.js");
   if (!existsSync(src)) {
@@ -251,22 +64,27 @@ export function writeDesktopPlugin(
   const wallet = isValidAddress(opts.wallet) ? opts.wallet : "";
   const server = opts.server.replace(/\/+$/, "");
   const raw = readFileSync(src, "utf8");
+  const device = /^[0-9a-f]{8,64}$/i.test(opts.deviceId ?? "") ? opts.deviceId! : "";
   const rendered = templateOnce(
-    templateOnce(raw, "__SERVER__", JSON.stringify(server)),
-    "__WALLET__",
-    JSON.stringify(wallet),
+    templateOnce(
+      templateOnce(raw, "__SERVER__", JSON.stringify(server)),
+      "__WALLET__",
+      JSON.stringify(wallet),
+    ),
+    "__DEVICE_ID__",
+    JSON.stringify(device),
   );
   const destDir = join(dest, "desktop");
   mkdirSync(destDir, { recursive: true });
   writeFileSync(join(destDir, "plugin.js"), rendered);
   return wallet
-    ? `✅ Hermes Desktop plugin written → ${join(destDir, "plugin.js")} (status-bar balance chip)`
+    ? `✅ Hermes Desktop plugin written → ${join(destDir, "plugin.js")} (sponsored status-bar line)`
     : `ℹ️  Hermes Desktop plugin written, but no wallet configured yet — chip stays hidden until \`/ads setup\`.`;
 }
 
 function writeFlatPlugin(
   pluginsDir: string,
-  desktop: { server: string; wallet: string },
+  desktop: { server: string; wallet: string; deviceId?: string },
 ): string {
   const dest = join(pluginsDir, PLUGIN_NAME);
   mkdirSync(dest, { recursive: true });
@@ -274,7 +92,10 @@ function writeFlatPlugin(
   copyFileSync(join(src, "plugin.yaml"), join(dest, "plugin.yaml"));
   copyFileSync(join(src, "__init__.py"), join(dest, "__init__.py"));
   const desktopResult = writeDesktopPlugin(dest, desktop);
-  return `✅ Hermes plugin written → ${dest}\n   ${desktopResult}`;
+  return (
+    `✅ Hermes plugin written → ${dest} (standalone — no pip package needed)\n` +
+    `   ${desktopResult}`
+  );
 }
 
 function patchConfigEnabled(): string {
@@ -406,13 +227,13 @@ export function installHermes(): string {
 
   const lines: string[] = [];
   if (detected.hermes) {
-    lines.push(installPythonPackage());
     mkdirSync(detected.paths.hermesPlugins, { recursive: true });
     const cfg = loadConfig();
     lines.push(
       writeFlatPlugin(detected.paths.hermesPlugins, {
         server: resolveServer(cfg),
         wallet: resolveWallet(cfg),
+        deviceId: deviceId(),
       }),
     );
     lines.push(enableHermesPlugin());
@@ -421,8 +242,6 @@ export function installHermes(): string {
     lines.push(
       "ℹ️  Hermes home not found — installing WebUI DOM patch only (CLI plugin skipped).",
     );
-    // Still need the Python package for latent-hermes-patch
-    lines.push(installPythonPackage());
   }
   lines.push(patchHermesWebui());
   return lines.join("\n");

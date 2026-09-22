@@ -1,15 +1,19 @@
 // Latent Protocol -- Hermes Desktop plugin (installed by `npx latent init`).
 // Lives beside plugin.yaml/__init__.py in the same ~/.hermes/plugins/agent-ads/
 // folder -- the desktop app's SDK loader scans this location automatically
-// ("one package, both SDKs"). The SERVER/WALLET placeholders a few lines
-// down are replaced at install time with JSON-encoded string literals by
+// ("one package, both SDKs"). The placeholders a few lines
+// down (SERVER/WALLET/DEVICE_ID) are replaced at install time with JSON-encoded string literals by
 // cli/src/surfaces/hermes.ts, never by naive interpolation.
 //
 // Docs: https://hermes-agent.nousresearch.com/docs/developer-guide/desktop-plugin-sdk
 //
-// This file is loaded as native UTF-8 ESM by Electron/V8 (not run through the
-// Python/regex patch pipeline latent_protocol/adapters/hermes_webui.py uses
-// for the community hermes-webui project), so literal UTF-8 glyphs are safe.
+// Surface: one sponsored line in the status bar (right), like the Claude Code
+// / Grok status line. It never touches the chat transcript. Billing honesty:
+// an impression is reported once per creative, and only while the window is
+// visible; rotation pauses while it is hidden.
+//
+// This file is loaded as native UTF-8 ESM by Electron/V8, so literal UTF-8
+// glyphs are safe.
 import {
   host,
   haptic,
@@ -23,135 +27,171 @@ import {
   PopoverTrigger
 } from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 var SERVER = __SERVER__
 var WALLET = __WALLET__
+// ~/.latent-protocol/device_id, templated in because the renderer can't read it.
+var DEVICE_ID = __DEVICE_ID__
 
-var MONEY_BAG = '💰'
+var DASHBOARD_URL = 'https://www.latentprotocol.xyz/dashboard'
+var ROTATE_MS = 3 * 60 * 1000
+var REQUEST_TIMEOUT_MS = 2000
+var CHIP_MAX = 48
 
-var $balance = atom(null)
-var $loading = atom(false)
+var $ad = atom(null)
 var osDoor = null
+var reported = {}
 
-function fetchBalance() {
-  if (!WALLET) return Promise.resolve(null)
-  $loading.set(true)
-  return fetch(SERVER + '/earnings/' + WALLET)
-    .then(function (r) { return r.ok ? r.json() : null })
-    .then(function (data) {
-      var bal = data && typeof data.balance === 'number' ? data.balance : null
-      $balance.set(bal)
-      return bal
-    })
-    .catch(function () { return null })
-    .finally(function () { $loading.set(false) })
+// Advertiser text is untrusted: drop control / bidi characters and clamp.
+function clean(text, max) {
+  var s = String(text == null ? '' : text)
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .replace(/[\u202a-\u202e\u2066-\u2069\u200e\u200f\u061c]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return s.length > max ? s.slice(0, Math.max(0, max - 1)).trimEnd() + '…' : s
 }
 
-function requestPayout() {
-  return fetch(SERVER + '/payout/request', {
+function isSafeUrl(url) {
+  if (typeof url !== 'string' || url.indexOf('https://') !== 0) return false
+  if (/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(url)) return false
+  try {
+    var u = new URL(url)
+    return u.username === '' && u.password === ''
+  } catch (_) {
+    return false
+  }
+}
+
+function postJson(path, body) {
+  var ctrl = new AbortController()
+  var timer = setTimeout(function () { ctrl.abort() }, REQUEST_TIMEOUT_MS)
+  return fetch(SERVER + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet_address: WALLET })
+    body: JSON.stringify(body),
+    signal: ctrl.signal
   })
-    .then(function (r) { return r.ok ? r.json() : null })
+    .then(function (r) { return r.status === 200 ? r.json() : null })
     .catch(function () { return null })
+    .finally(function () { clearTimeout(timer) })
 }
 
-function formatBalance(balance) {
-  return typeof balance === 'number' ? '$' + balance.toFixed(4) : '$--'
+function visible() {
+  return typeof document === 'undefined' || document.visibilityState !== 'hidden'
 }
 
-function AdsPanel() {
-  var balance = useValue($balance)
-  var loading = useValue($loading)
-  var state = useState('')
-  var payoutMessage = state[0]
-  var setPayoutMessage = state[1]
+function reportImpression(ad) {
+  var id = ad.ad_id || ad.id
+  if (!id || reported[id + ':' + ad.impression_token]) return
+  reported[id + ':' + ad.impression_token] = true
+  void postJson('/ad/impression', {
+    ad_id: id,
+    user_wallet: WALLET,
+    token: ad.impression_token || ''
+  })
+}
+
+function refreshAd() {
+  if (!WALLET || !visible()) return Promise.resolve(null)
+  return postJson('/ad/request', {
+    user_wallet: WALLET,
+    agent: 'hermes-desktop',
+    context: 'coding',
+    surface: 'statusline',
+    device_id: DEVICE_ID
+  }).then(function (ad) {
+    // A 204 (no fill) keeps the current creative instead of blanking the bar.
+    if (ad && (ad.ad_id || ad.id)) {
+      $ad.set(ad)
+      if (visible()) reportImpression(ad)
+    }
+    return ad
+  })
+}
+
+function clickUrl(ad) {
+  var id = ad.ad_id || ad.id
+  if (id && ad.click_token) {
+    // Server credits the click, then 302s to the advertiser's stored URL.
+    return SERVER + '/ad/click?ad=' + encodeURIComponent(id) +
+      '&w=' + encodeURIComponent(WALLET) + '&t=' + encodeURIComponent(ad.click_token)
+  }
+  return isSafeUrl(ad.cta_url) ? ad.cta_url : ''
+}
+
+function openExternal(url) {
+  if (url && osDoor && osDoor.openExternal) void osDoor.openExternal(url)
+}
+
+function AdPanel() {
+  var ad = useValue($ad)
+  var body = ad ? clean(ad.body || ad.title, 140) : ''
+  var cta = ad ? clean(ad.cta_text, 24) || 'Learn more' : ''
+  var url = ad ? clickUrl(ad) : ''
 
   return jsxs('div', {
-    className: 'flex w-56 flex-col gap-2 p-1 text-sm',
+    className: 'flex w-60 flex-col gap-2 p-1 text-sm',
     children: [
       jsx('div', {
         className: 'text-xs font-medium text-(--ui-text-secondary)',
-        children: MONEY_BAG + ' Sponsored ads'
+        children: '💰 Sponsored'
       }),
-      jsxs('div', {
-        className: 'flex items-center justify-between',
-        children: [
-          jsx('span', { className: 'text-(--ui-text-tertiary)', children: 'Balance' }),
-          jsx('span', { className: 'font-medium', children: formatBalance(balance) })
-        ]
-      }),
-      jsxs('div', {
-        className: 'flex items-center justify-between text-xs',
-        children: [
-          jsx('span', { className: 'text-(--ui-text-tertiary)', children: 'Wallet' }),
-          jsx('span', {
-            className: 'font-mono',
-            children: WALLET ? WALLET.slice(0, 6) + '...' + WALLET.slice(-4) : 'not set'
+      jsx('div', { children: body || 'No sponsored message right now.' }),
+      ad && typeof ad.earn_amount === 'number'
+        ? jsx('div', {
+            className: 'text-xs text-(--ui-text-tertiary)',
+            children: '+$' + ad.earn_amount + ' USDC earned'
           })
-        ]
-      }),
+        : null,
+      url
+        ? jsx(Button, {
+            size: 'sm',
+            onClick: function () { haptic('tap'); openExternal(url) },
+            children: cta + ' →'
+          })
+        : null,
       jsx(Button, {
         size: 'sm',
         variant: 'secondary',
-        disabled: !WALLET,
-        onClick: function () {
-          haptic('tap')
-          if (WALLET && osDoor) void osDoor.writeClipboard(WALLET)
-        },
-        children: 'Copy wallet address'
+        onClick: function () { haptic('tap'); openExternal(DASHBOARD_URL) },
+        children: 'Balance & cash out'
       }),
-      jsx(Button, {
-        size: 'sm',
-        disabled: !WALLET || loading,
-        onClick: function () {
-          haptic('tap')
-          setPayoutMessage('Requesting...')
-          requestPayout().then(function (res) {
-            if (res && res.tx_hash) {
-              setPayoutMessage('Sent: ' + String(res.tx_hash).slice(0, 10) + '...')
-              host.notify({ kind: 'success', message: 'Payout requested' })
-            } else {
-              setPayoutMessage('Payout failed or below minimum.')
-            }
-            void fetchBalance()
-          })
-        },
-        children: 'Request payout'
-      }),
-      payoutMessage
-        ? jsx('div', { className: 'text-xs text-(--ui-text-tertiary)', children: payoutMessage })
-        : null,
       jsx('div', {
         className: 'text-xs text-(--ui-text-quaternary)',
-        children: 'Type /ads settings in chat to change wallet, frequency, or turn ads off.'
+        children: 'Wallet ' + WALLET.slice(0, 6) + '…' + WALLET.slice(-4) + ' · /ads settings in chat'
       })
     ]
   })
 }
 
 function StatusChip() {
-  var balance = useValue($balance)
+  var ad = useValue($ad)
 
   useEffect(function () {
-    void fetchBalance()
-    var id = setInterval(function () { void fetchBalance() }, 60000)
-    return function () { clearInterval(id) }
+    void refreshAd()
+    var id = setInterval(function () { void refreshAd() }, ROTATE_MS)
+    function onVisible() { if (visible()) void refreshAd() }
+    document.addEventListener('visibilitychange', onVisible)
+    return function () {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
+  var label = ad ? clean(ad.body || ad.title, CHIP_MAX) : ''
   return jsxs(Popover, {
     children: [
       jsx(PopoverTrigger, {
-        className: 'flex items-center gap-1 px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) hover:text-(--ui-text-secondary)',
+        className: 'flex max-w-80 items-center gap-1 truncate px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) hover:text-(--ui-text-secondary)',
         onClick: function () { haptic('tap') },
-        children: MONEY_BAG + ' ' + formatBalance(balance)
+        children: label ? '💰 Sponsored · ' + label : '💰'
       }),
       jsx(PopoverContent, {
         align: 'end',
         className: 'w-64 p-3',
-        children: jsx(AdsPanel, {})
+        children: jsx(AdPanel, {})
       })
     ]
   })
@@ -162,31 +202,26 @@ export default {
   name: 'Latent Protocol Ads',
   register: function (ctx) {
     osDoor = ctx.os
-    // Nothing to contribute without a configured wallet -- mirrors the
-    // same early-out the Hermes WebUI patch uses.
+    // Nothing to show without a configured wallet.
     if (!WALLET) return
 
     ctx.register({
-      id: 'balance-chip',
+      id: 'sponsored-chip',
       area: STATUSBAR_AREAS.right,
       order: 140,
       render: function () { return jsx(StatusChip, {}) }
     })
 
     ctx.register({
-      id: 'check-balance',
+      id: 'open-dashboard',
       area: PALETTE_AREA,
       data: {
-        id: 'agent-ads.check-balance',
-        label: 'Ads: Check Balance',
-        keywords: ['ads', 'earnings', 'balance', 'sponsored', 'latent'],
+        id: 'agent-ads.open-dashboard',
+        label: 'Ads: Balance & Cash Out',
+        keywords: ['ads', 'earnings', 'balance', 'sponsored', 'latent', 'payout'],
         run: function () {
-          fetchBalance().then(function (bal) {
-            host.notify({
-              kind: 'info',
-              message: typeof bal === 'number' ? 'Balance: ' + formatBalance(bal) : 'Could not fetch balance.'
-            })
-          })
+          openExternal(DASHBOARD_URL)
+          host.notify({ kind: 'info', message: 'Opened the Latent dashboard.' })
         }
       }
     })
