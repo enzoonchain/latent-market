@@ -1,14 +1,14 @@
-# Latent Protocol — Hermes Plugin (installed by `npx latent init`)
+# Latent Protocol — Hermes Plugin (installed by `npx latent-protocol init`)
+# Standalone: __init__.py is stdlib-only, no pip package required.
 
 name: agent-ads
-version: "0.1.0"
-description: "Earn USDC while your agent works. Open ad marketplace for AI agents on Base."
+version: "0.2.0"
+description: "Earn USDC while your agent works: a labelled sponsored footer under replies, and a status-bar line in Hermes Desktop."
 author: "Latent Protocol"
 license: Apache-2.0
-homepage: "https://github.com/enzoonchain/latent-protocol"
+homepage: "https://github.com/enzoonchain/latent-market"
 
 requires_env: []
 
 provides_hooks:
-  - pre_llm_call
   - transform_llm_output
