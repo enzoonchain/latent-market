@@ -124,35 +124,39 @@ def ad_status() -> dict:
 
 
 @mcp.tool()
-def setup_wallet(mode: str = "generate", address: str = "") -> dict:
+def setup_wallet(mode: str = "email", email: str = "", address: str = "") -> dict:
     """Set up your earning wallet. Call this once to start earning USDC.
 
     Args:
-        mode: "generate" to create a new wallet, "import" to use an existing address.
-        address: Your existing EVM address (only needed when mode="import").
+        mode: "email" to get a Privy wallet bound to an email (claim it later in
+            the browser — no private key is ever created here), or "import" to
+            use an existing EVM address.
+        email: The email to bind the wallet to (mode="email").
+        address: Your existing EVM address (mode="import").
 
-    Returns when mode="generate":
-        address, private_key (save this!), and a reminder to import into MetaMask.
-    Returns when mode="import":
-        Confirmation that the address was saved.
+    For Google / X / existing-wallet sign-in, run `npx latent-protocol init`.
     """
-    from .setup import generate_wallet, is_valid_address, save_config_file
+    from .setup import is_valid_address, save_config_file
 
-    if mode == "generate":
-        addr, private_key = generate_wallet()
-        save_config_file({"wallet": addr})
-        # Reload so subsequent tool calls in this session use the new wallet
-        config.wallet = addr
+    if mode == "email":
+        if not email:
+            return {"success": False, "error": "Provide the email to bind the wallet to in the 'email' field."}
+        try:
+            earner = wallet_api.pregenerate_email(email, config.server)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+        save_config_file(
+            {"wallet": earner["wallet"], "privy_user_id": earner["privy_user_id"], "auth": "privy"}
+        )
+        config.wallet = earner["wallet"]
         return {
             "success": True,
-            "address": addr,
-            "private_key": private_key,
-            "warning": (
-                "Save your private key now — it will NOT be shown again. "
-                "Import it into MetaMask or any EVM wallet to access your USDC earnings. "
-                "Latent Protocol only stores your address."
+            "address": earner["wallet"],
+            "claim_url": earner["claim_url"],
+            "next": (
+                f"Ads earn USDC to this address now. Claim it with an email code at "
+                f"{earner['claim_url']} to cash out."
             ),
-            "next": "Your wallet is active. Ads will now earn you USDC automatically.",
         }
 
     if mode == "import":
@@ -160,7 +164,7 @@ def setup_wallet(mode: str = "generate", address: str = "") -> dict:
             return {"success": False, "error": "Provide your wallet address in the 'address' field."}
         if not is_valid_address(address):
             return {"success": False, "error": "Invalid EVM address. Must be 0x + 40 hex chars."}
-        save_config_file({"wallet": address})
+        save_config_file({"wallet": address, "auth": "address"})
         config.wallet = address
         return {
             "success": True,
@@ -168,7 +172,7 @@ def setup_wallet(mode: str = "generate", address: str = "") -> dict:
             "next": "Wallet saved. Ads will now earn USDC to this address.",
         }
 
-    return {"success": False, "error": "mode must be 'generate' or 'import'"}
+    return {"success": False, "error": "mode must be 'email' or 'import'"}
 
 
 @mcp.tool()

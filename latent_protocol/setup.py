@@ -73,13 +73,6 @@ def device_id() -> str:
 
 # ── Wallet helpers ───────────────────────────────────────────────────────────
 
-def generate_wallet() -> tuple[str, str]:
-    """Return (address, private_key) for a new random EVM wallet."""
-    from eth_account import Account
-    acct = Account.create()
-    return acct.address, acct.key.hex()
-
-
 def is_valid_address(address: str) -> bool:
     return bool(_EVM_ADDRESS_RE.match(address))
 
@@ -98,23 +91,28 @@ def run_interactive_setup() -> None:
             print("No changes made.")
             return
 
-    print("\nHow would you like to set up your wallet?")
-    print("  [1] Generate a new wallet (recommended)")
-    print("  [2] Use my existing wallet address")
+    print("\nHow do you want to get paid?")
+    print("  [1] Email me a wallet (claim later in the browser)  (recommended)")
+    print("  [2] I already have a 0x address")
+    print("  Sign in with Google / X / an existing wallet instead: npx latent-protocol init")
 
-    choice = input("\nChoice [1/2]: ").strip()
+    choice = input("\nChoice [1/2]: ").strip() or "1"
 
     if choice == "1":
-        address, private_key = generate_wallet()
-        print(f"\n✅ New wallet generated!")
-        print(f"\n   Address:     {address}")
-        print(f"   Private key: {private_key}")
-        print("\n   ⚠️  Save your private key now — import it into MetaMask or")
-        print("      any EVM wallet to access your USDC earnings.")
-        print("      Latent Protocol only stores your address, not the private key.\n")
-        input("Press Enter once you've saved your private key... ")
-        save_config_file({"wallet": address})
-        print(f"\n✅ Wallet saved to {_CONFIG_FILE}")
+        from .config import Config
+        from .wallet import pregenerate_email
+
+        email = input("Email: ").strip()
+        try:
+            earner = pregenerate_email(email, Config.from_env().server)
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            return
+        save_config_file(
+            {"wallet": earner["wallet"], "privy_user_id": earner["privy_user_id"], "auth": "privy"}
+        )
+        print(f"\n✅ Wallet ready for {email}: {earner['wallet']}")
+        print(f"   Claim it (email OTP) at {earner['claim_url']}")
 
     elif choice == "2":
         while True:
@@ -122,7 +120,7 @@ def run_interactive_setup() -> None:
             if is_valid_address(address):
                 break
             print("❌ Invalid address. Must be 0x followed by 40 hex characters.")
-        save_config_file({"wallet": address})
+        save_config_file({"wallet": address, "auth": "address"})
         print(f"\n✅ Wallet saved to {_CONFIG_FILE}")
 
     else:

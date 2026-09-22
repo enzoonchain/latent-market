@@ -12,7 +12,7 @@
  */
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,7 +54,7 @@ test("the bundled CLI runs", () => {
   assert.match(out, /init/);
 });
 
-test("the bundled CLI binds --wallet without hitting the network (viem still inlined for --generate)", () => {
+test("the bundled CLI binds --wallet without hitting the network", () => {
   const home = mkdtempSync(join(tmpdir(), "latent-bundle-"));
   const wallet = "0x7331003C29a8Db67E141dD39964B205598b60bcf";
   const out = execFileSync(
@@ -113,4 +113,15 @@ test("`init` on closed stdin fails loudly instead of exiting 0 with no wallet", 
   assert.notEqual(status, 0, `expected a non-zero exit, got ${status}:\n${output}`);
   assert.match(output, /stdin closed before answering/);
   assert.equal(existsSync(join(home, ".latent-protocol", "config.json")), false);
+});
+
+test("the bundled CLI rejects the removed --generate flag instead of minting a key", () => {
+  const home = mkdtempSync(join(tmpdir(), "latent-bundle-"));
+  const res = spawnSync(process.execPath, [dist("index.js"), "init", "--generate", "--yes"], {
+    encoding: "utf8",
+    env: { ...process.env, HOME: home },
+  });
+  assert.notEqual(res.status, 0);
+  assert.match(res.stderr, /--generate was removed/);
+  assert.doesNotMatch(res.stdout + res.stderr, /Private key/i);
 });
