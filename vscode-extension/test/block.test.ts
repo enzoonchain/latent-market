@@ -68,3 +68,20 @@ describe("buildBlock", () => {
     expect(block).toContain("clean(");
   });
 });
+
+describe("buildBlock output", () => {
+  const block = buildBlock("http://127.0.0.1:5123/cb/tok123", 10, "ml");
+
+  it("is valid JavaScript", () => {
+    expect(() => new Function(block)).not.toThrow();
+  });
+
+  it("only treats a real 127.0.0.1:<port>/ URL as the loopback click chain", () => {
+    const src = block.match(/function isLoopback\(v\)\{[^}]*\}/)?.[0];
+    expect(src).toBeTruthy();
+    const isLoopback = new Function(`${src}; return isLoopback;`)() as (v: string) => boolean;
+    expect(isLoopback("http://127.0.0.1:5123/cb/tok/click?adId=1")).toBe(true);
+    expect(isLoopback("http://127.0.0.1.evil.com/x")).toBe(false);
+    expect(isLoopback("javascript:alert(1)")).toBe(false);
+  });
+});

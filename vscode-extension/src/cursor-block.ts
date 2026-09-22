@@ -41,6 +41,10 @@ export function buildCursorBlock(
     } catch(e){}
   }
 
+  function clean(v) {
+    return String(v == null ? "" : v).replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g, "").slice(0, 200);
+  }
+
   function isBusy() {
     var stopBtn = document.querySelector("span.codicon-debug-stop");
     if (stopBtn && stopBtn.offsetParent !== null) return true;
@@ -93,15 +97,19 @@ export function buildCursorBlock(
   function show() {
     if (!cur) return;
     var container = ensureEl();
-    container.textContent = "\\uD83D\\uDCA1 " + (cur.text || "").slice(0, 60);
-    container.title = cur.url || "Latent Protocol";
+    container.textContent = "\\uD83D\\uDCA1 Sponsored: " + clean(cur.text).slice(0, 60);
+    container.title = /^https:\\/\\//i.test(String(cur.url || "")) ? clean(cur.url) : "Latent Protocol — sponsored";
     container.style.display = "block";
     container.onclick = function() {
       if (!cur) return;
       // Best-effort billing twin — the window.open navigation (the loopback
       // /click 302 chain) is the real click path.
       ping("/click", { adId: cur.adId, surface: "cursor" });
-      var href = String(cur.clickHref || "").indexOf("http://127.0.0.1") === 0 ? cur.clickHref : cur.url;
+      // Only ever navigate to our own loopback chain or a plain https URL —
+      // this runs in the privileged workbench, never hand window.open a
+      // javascript:/file:/vscode: URL from ad data.
+      var href = /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\//.test(String(cur.clickHref || "")) ? cur.clickHref
+        : /^https:\\/\\/[^\\s]+$/i.test(String(cur.url || "")) ? cur.url : "";
       if (href) window.open(href, "_blank");
     };
   }

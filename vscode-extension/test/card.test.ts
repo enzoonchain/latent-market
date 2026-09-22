@@ -83,3 +83,14 @@ describe("sanitizeText", () => {
     expect(sanitizeText("plain ok")).toBe("plain ok");
   });
 });
+
+describe("cardHtml loopback check", () => {
+  it("does not accept a 127.0.0.1-prefixed foreign host as the click chain", () => {
+    const html = cardHtml(
+      { text: "t", url: "https://adv.example/a", clickHref: "http://127.0.0.1.evil.com/x" },
+      "",
+    );
+    expect(html).not.toContain("evil.com");
+    expect(html).toContain('href="https://adv.example/a"');
+  });
+});

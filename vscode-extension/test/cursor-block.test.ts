@@ -42,3 +42,26 @@ describe("buildCursorBlock", () => {
     expect(block).toContain("})();");
   });
 });
+
+describe("buildCursorBlock output", () => {
+  const block = buildCursorBlock("http://127.0.0.1:5123/cb/tok123", 10, "web-dev");
+
+  it("is valid JavaScript", () => {
+    expect(() => new Function(block)).not.toThrow();
+  });
+
+  it("only navigates to the loopback chain or a plain https URL", () => {
+    const loop = block.match(/\/\^http:\\\/\\\/127[^\s]*?\\\/\//)?.[0];
+    const https = block.match(/\/\^https:\\\/\\\/\[\^\\s\]\+\$\/i/)?.[0];
+    expect(loop).toBeTruthy();
+    expect(https).toBeTruthy();
+    const isLoop = new Function(`return ${loop}`)() as RegExp;
+    const isHttps = new Function(`return ${https}`)() as RegExp;
+    expect(isLoop.test("http://127.0.0.1:5123/cb/tok/click?adId=1")).toBe(true);
+    expect(isLoop.test("http://127.0.0.1.evil.com/x")).toBe(false);
+    expect(isHttps.test("https://example.com/a")).toBe(true);
+    for (const bad of ["javascript:alert(1)", "vscode://x", "file:///etc/passwd", "http://example.com"]) {
+      expect(isHttps.test(bad) || isLoop.test(bad)).toBe(false);
+    }
+  });
+});

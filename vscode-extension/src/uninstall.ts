@@ -1,30 +1,36 @@
 /**
- * Uninstall cleanup — triggered by `vscode:uninstall` hook.
+ * Uninstall cleanup — the `vscode:uninstall` entry point (bundled separately
+ * to dist/uninstall.js via src/uninstall-main.ts; package.json `scripts["vscode:uninstall"]`).
  *
- * Restores any patched bundles and removes CLI hooks so the extension
- * leaves no trace. This is the `uninstall.js` entry point that VS Code
- * calls when the extension is uninstalled.
+ * The editor runs it in a plain node process once the extension is fully
+ * uninstalled — NOT on window close/reload. It must never be called from
+ * `deactivate()`: that runs on every reload, and would strip patches another
+ * window still uses.
+ *
+ * Restores patched agent bundles and Cursor workbenches, and removes the
+ * Claude CLI statusLine only if the extension itself wrote it (a CLI-installed
+ * one belongs to `latent uninstall`).
  */
 import { restore, findAgentBundles } from "./patcher.js";
 import { removeClaudeCliHook } from "./claude-cli.js";
+import { restoreAllWorkbenches } from "./workbench.js";
 
 export function uninstallCleanup(): void {
-  // Restore all patched bundles
   try {
-    for (const b of findAgentBundles()) {
-      restore(b);
-    }
+    for (const b of findAgentBundles()) restore(b);
   } catch {
     // best-effort
   }
-
-  // Remove Claude CLI hook
+  try {
+    restoreAllWorkbenches();
+  } catch {
+    // best-effort
+  }
   try {
     removeClaudeCliHook();
   } catch {
     // best-effort
   }
-
-  // Note: we do NOT delete ~/.latent-protocol/ — the user's wallet config
-  // should survive a reinstall. Only hooks and patches are removed.
+  // ~/.latent-protocol/ (wallet config) is deliberately kept — it is shared
+  // with the CLI and must survive a reinstall.
 }

@@ -5,6 +5,11 @@
   "version": "0.2.0",
   "publisher": "latent-protocol",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enzoonchain/latent-market.git",
+    "directory": "vscode-extension"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -81,7 +86,7 @@
         "latent.cursorOverlay": {
           "type": "boolean",
           "default": false,
-          "description": "Show ads in the Cursor agent composer area (workbench overlay). Experimental."
+          "description": "Experimental, Cursor only: show the sponsor line in the agent composer area. Adds one script tag to Cursor's workbench.html (pristine backup kept, restored on disable/uninstall); Cursor may report its installation as modified while this is on. Re-applied after Cursor updates."
         }
       }
     },
@@ -100,6 +105,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc -p ./ --noEmit",
     "vscode:prepublish": "npm run typecheck && npm run build",
+    "vscode:uninstall": "node ./dist/uninstall.js",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -108,5 +114,8 @@
     "esbuild": "^0.24.2",
     "typescript": "^5.7.0",
     "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
   }
 }

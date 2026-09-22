@@ -8,7 +8,7 @@
  * If both are active, they overwrite each other. This module detects the
  * conflict BEFORE patching and tells the user clearly.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -34,7 +34,6 @@ export function findCompetitorExtensions(cursorExtensionsDir?: string): string[]
   ];
   for (const dir of dirs) {
     try {
-      const { readdirSync } = require("node:fs");
       const entries = readdirSync(dir);
       for (const entry of entries) {
         for (const comp of COMPETITORS) {

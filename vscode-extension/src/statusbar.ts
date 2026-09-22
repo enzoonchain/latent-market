@@ -5,9 +5,12 @@
  *  - Left item: current sponsor line (rotating)
  *  - Right item: live earnings balance (polls the server every 60s)
  *
- * The earnings poller degrades to "$0.00" on failure — never a bare label.
+ * Never shows a made-up number: a failed poll keeps the last real balance
+ * (or "—" before the first one), and a balance the server keeps private
+ * (401, no local signing key) shows as "private", not "$0.00".
  */
 import * as vscode from "vscode";
+import { fetchEarnings } from "./earnings.js";
 
 const EARNINGS_POLL_MS = 60_000;
 
@@ -19,7 +22,7 @@ export interface EarningsData {
 export class EarningsStatusBar {
   private item: vscode.StatusBarItem;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private lastBalance = 0;
+  private lastBalance: number | null = null;
 
   constructor(
     private readonly serverUrl: string,
@@ -30,7 +33,7 @@ export class EarningsStatusBar {
   }
 
   start(): void {
-    this.item.text = "💰 $0.00";
+    this.item.text = "💰 —";
     this.item.tooltip = "Latent Protocol — earnings";
     this.item.show();
     void this.poll();
@@ -46,7 +49,7 @@ export class EarningsStatusBar {
     this.item.dispose();
   }
 
-  get balance(): number {
+  get balance(): number | null {
     return this.lastBalance;
   }
 
@@ -56,18 +59,17 @@ export class EarningsStatusBar {
       this.item.tooltip = "Run `npx latent-protocol init` to set up earnings";
       return;
     }
-    try {
-      const r = await fetch(`${this.serverUrl}/earnings/${this.wallet}`, {
-        signal: AbortSignal.timeout(5000),
-      });
-      const j = (await r.json()) as { balance?: number; tier?: string };
-      this.lastBalance = Number(j.balance ?? 0);
-      const tier = j.tier ? ` [${j.tier}]` : "";
-      this.item.text = `💰 $${this.lastBalance.toFixed(2)}${tier}`;
-      this.item.tooltip = `Latent Protocol — $${this.lastBalance.toFixed(4)} USDC earned`;
-      this.item.color = undefined;
-    } catch {
-      this.item.text = `💰 $${this.lastBalance.toFixed(2)}`;
+    const e = await fetchEarnings(this.serverUrl, this.wallet);
+    if (e.kind === "ok") {
+      this.lastBalance = e.balance;
+      const tier = e.tier ? ` [${e.tier}]` : "";
+      this.item.text = `💰 $${e.balance.toFixed(2)}${tier}`;
+      this.item.tooltip = `Latent Protocol — $${e.balance.toFixed(4)} USDC earned`;
+    } else if (e.kind === "auth") {
+      this.item.text = "💰 private";
+      this.item.tooltip = "Latent Protocol — balance is only shown to the wallet owner; sign in on the Latent dashboard to view it";
+    } else {
+      this.item.text = this.lastBalance === null ? "💰 —" : `💰 $${this.lastBalance.toFixed(2)}`;
       this.item.tooltip = "Latent Protocol — earnings (server unreachable)";
     }
   }

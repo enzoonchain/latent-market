@@ -13,21 +13,29 @@ import { loadConfig } from "./config.js";
 import { classifyWorkspace, type Category } from "./classify.js";
 import { Loopback } from "./loopback.js";
 import { buildBlock } from "./block.js";
-import { buildCursorBlock, CURSOR_MARK_START, CURSOR_MARK_END } from "./cursor-block.js";
+import { buildCursorBlock } from "./cursor-block.js";
 import { findAgentBundles, patch, restore, isPatched } from "./patcher.js";
 import { refreshKillswitch } from "./health.js";
 import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 import { cardHtml } from "./card.js";
 import { ViewabilityTracker, type MetricEvent } from "./metrics.js";
 import { EarningsStatusBar } from "./statusbar.js";
+import { fetchEarnings } from "./earnings.js";
 import { runAllChecks } from "./conflict.js";
-import { installClaudeCliHook, removeClaudeCliHook, isLatentHookInstalled } from "./claude-cli.js";
-import { uninstallCleanup } from "./uninstall.js";
+import { installClaudeCliHook, removeClaudeCliHook } from "./claude-cli.js";
+import { findWorkbenchHtml, isWorkbenchPatched, patchWorkbench, restoreWorkbench } from "./workbench.js";
 
 let loopback: Loopback | null = null;
 let statusItem: vscode.StatusBarItem | null = null;
 let earningsBar: EarningsStatusBar | null = null;
 let rotateTimer: ReturnType<typeof setInterval> | null = null;
+let statusFocusSub: vscode.Disposable | null = null;
+
+/** On screen = the editor window is focused (a minimized/background window
+ * shows nothing to anyone). Pauses/resumes a tracker's view-time clock. */
+function trackWindowFocus(tracker: ViewabilityTracker): vscode.Disposable {
+  return vscode.window.onDidChangeWindowState((s) => (s.focused ? tracker.viewable() : tracker.hidden()));
+}
 let reassertTimer: ReturnType<typeof setInterval> | null = null;
 let category: Category = "general";
 
@@ -102,9 +110,10 @@ class SponsorViewProvider implements vscode.WebviewViewProvider {
       current = ad;
       if (ad) {
         tracker.impressionRendered(ad.adId);
-        tracker.viewable();
+        if (vscode.window.state.focused) tracker.viewable();
       }
     };
+    const focusSub = trackWindowFocus(tracker);
     void render();
     const iv = setInterval(render, Math.max(3000, loadConfig().rotateSeconds * 1000));
     view.onDidChangeVisibility(() => {
@@ -112,6 +121,7 @@ class SponsorViewProvider implements vscode.WebviewViewProvider {
     });
     view.onDidDispose(() => {
       clearInterval(iv);
+      focusSub.dispose();
       flush();
     });
   }
@@ -122,6 +132,8 @@ async function startStatusRotation(): Promise<void> {
   const tracker = new ViewabilityTracker(emitMetric);
   let current: LoopAd | null = null;
   const cfg = loadConfig();
+  statusFocusSub?.dispose();
+  statusFocusSub = trackWindowFocus(tracker);
   const tick = async () => {
     if (current) {
       await reportImpression(current, tracker.totalVisibleMs(), "statusbar");
@@ -135,7 +147,7 @@ async function startStatusRotation(): Promise<void> {
         : "Latent Protocol — sponsored";
       statusItem!.show();
       tracker.impressionRendered(current.adId);
-      tracker.viewable();
+      if (vscode.window.state.focused) tracker.viewable();
     } else {
       statusItem!.text = "💡 Latent";
       statusItem!.show();
@@ -190,6 +202,46 @@ function restoreAll(announce: boolean): void {
 
 let killswitchTimer: ReturnType<typeof setInterval> | null = null;
 
+function isCursor(): boolean {
+  return /cursor/i.test(vscode.env.appName);
+}
+
+function cursorOverlayEnabled(): boolean {
+  return vscode.workspace.getConfiguration("latent").get<boolean>("cursorOverlay", false);
+}
+
+/**
+ * Keep the Cursor workbench overlay in sync with `latent.cursorOverlay`:
+ * patch when on (idempotent — also re-applies after a Cursor update wiped it),
+ * restore when off. Workbench changes only take effect after a window reload.
+ */
+function syncCursorOverlay(announce: boolean): void {
+  if (!isCursor()) {
+    if (announce && cursorOverlayEnabled()) {
+      void vscode.window.showInformationMessage("Latent: the composer overlay is Cursor-only.");
+    }
+    return;
+  }
+  const html = findWorkbenchHtml(vscode.env.appRoot);
+  if (!html) {
+    if (announce) void vscode.window.showWarningMessage("Latent: Cursor workbench.html not found — overlay unavailable.");
+    return;
+  }
+  const wasPatched = isWorkbenchPatched(html);
+  const cfg = loadConfig();
+  if (cursorOverlayEnabled() && cfg.enabled && loopback) {
+    const res = patchWorkbench(html, buildCursorBlock(loopback.baseUrl, cfg.rotateSeconds, category));
+    if (res === "error") {
+      void vscode.window.showWarningMessage("Latent: could not patch the Cursor workbench (permissions?).");
+    } else if (!wasPatched) {
+      void vscode.window.showInformationMessage("Latent: Cursor overlay installed — reload the window to show it.");
+    }
+  } else if (wasPatched && !cursorOverlayEnabled()) {
+    restoreWorkbench(html);
+    if (announce) void vscode.window.showInformationMessage("Latent: Cursor overlay removed — reload the window to apply.");
+  }
+}
+
 async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
   const cfg = loadConfig();
   if (!cfg.enabled) return;
@@ -216,11 +268,14 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
   }
 
   if (cfg.patchAgentBundles) await applyBundlePatch(context, false);
+  syncCursorOverlay(false);
 }
 
 function stopDisplay(): void {
   if (rotateTimer) clearInterval(rotateTimer);
   rotateTimer = null;
+  statusFocusSub?.dispose();
+  statusFocusSub = null;
   statusItem?.hide();
   earningsBar?.stop();
   earningsBar = null;
@@ -251,11 +306,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("latent.showEarnings", async () => {
       const cfg = loadConfig();
       if (!cfg.wallet) return void vscode.window.showWarningMessage("Latent: no wallet set (run `npx latent-protocol init`).");
-      try {
-        const r = await fetch(`${cfg.server}/earnings/${cfg.wallet}`);
-        const j = (await r.json()) as { balance?: number };
-        void vscode.window.showInformationMessage(`Latent balance: $${Number(j.balance ?? 0).toFixed(4)} USDC`);
-      } catch {
+      const e = await fetchEarnings(cfg.server, cfg.wallet);
+      if (e.kind === "ok") {
+        void vscode.window.showInformationMessage(`Latent balance: $${e.balance.toFixed(4)} USDC`);
+      } else if (e.kind === "auth") {
+        void vscode.window.showInformationMessage(
+          "Latent: your balance is private — the server only shows it to the wallet owner. Sign in on the Latent dashboard to view it.",
+        );
+      } else {
         void vscode.window.showErrorMessage("Latent: could not reach the ad server.");
       }
     }),
@@ -270,11 +328,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
     vscode.commands.registerCommand("latent.installCliHook", async () => {
-      const result = installClaudeCliHook();
+      let result = installClaudeCliHook();
+      if (result === "conflict") {
+        const owner = runAllChecks().find((c) => c.target === "claude-cli" && c.hasConflict);
+        const pick = await vscode.window.showWarningMessage(
+          owner?.message ?? "Claude Code already has a statusLine. Replace it with Latent? (It is restored when you remove the Latent hook.)",
+          { modal: true },
+          "Replace",
+        );
+        if (pick !== "Replace") return;
+        result = installClaudeCliHook(true);
+      }
       const msgs = {
         "installed": "Latent: Claude CLI hook installed.",
         "already-installed": "Latent: Claude CLI hook already active.",
-        "error": "Latent: failed to install Claude CLI hook.",
+        "conflict": "Latent: Claude Code statusLine left unchanged.",
+        "needs-cli": "Latent: run `npx latent-protocol init` first — it installs the status-line runtime this hook uses.",
+        "error": "Latent: could not update ~/.claude/settings.json (unparseable or unwritable — left untouched).",
       };
       void vscode.window.showInformationMessage(msgs[result]);
     }),
@@ -282,10 +352,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const result = removeClaudeCliHook();
       const msgs = {
         "removed": "Latent: Claude CLI hook removed.",
-        "not-installed": "Latent: no Claude CLI hook to remove.",
+        "not-installed": "Latent: no extension-installed Claude CLI hook to remove (a CLI-installed one is removed with `latent uninstall`).",
         "error": "Latent: failed to remove Claude CLI hook.",
       };
       void vscode.window.showInformationMessage(msgs[result]);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("latent.cursorOverlay")) syncCursorOverlay(true);
     }),
   );
 
@@ -293,6 +369,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {
+  // Runs on every window close/reload — only stop this window's timers and
+  // loopback. Patches stay (other windows use them); real cleanup is the
+  // `vscode:uninstall` script (dist/uninstall.js).
   stopDisplay();
-  uninstallCleanup();
 }

@@ -36,7 +36,7 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     function onScreen(){ return busy() && visible(); }
     function clean(v){ return String(v == null ? '' : v).replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g,'').slice(0,200); }
     function isHttps(v){ return String(v || '').toLowerCase().indexOf('https://') === 0; }
-    function isLoopback(v){ return String(v || '').toLowerCase().indexOf('http://127.0.0.1') === 0; }
+    function isLoopback(v){ return /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\//.test(String(v || '')); }
     function metric(event, extra){
       try { fetch(CFG.base + '/metric', { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(Object.assign({ event: event, adId: cur ? cur.adId : '' }, extra || {})) }); } catch(e){}

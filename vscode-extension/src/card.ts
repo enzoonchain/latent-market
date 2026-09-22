@@ -28,7 +28,7 @@ export function cardHtml(ad: CardAd | null, wallet: string, cspSource = ""): str
   // on to the advertiser); fall back to the raw https cta_url. A link is
   // rendered only for the loopback chain or a real `https://` URL.
   const clickHref =
-    ad?.clickHref && ad.clickHref.startsWith("http://127.0.0.1")
+    ad?.clickHref && /^http:\/\/127\.0\.0\.1:\d+\//.test(ad.clickHref)
       ? ad.clickHref
       : ad && isSafeHttpUrl(ad.url)
         ? ad.url
