@@ -22,7 +22,7 @@ supported, adding it is a self-contained piece of work — see
 
 ## Install
 
-Public beta (`0.1.4-beta.2` on the `beta` dist-tag; `latest` currently points at the same version). Ads run against the Base Sepolia ad server — not a mainnet launch.
+Public beta (`0.1.4-beta.3` on the `beta` dist-tag; `latest` currently points at the same version). Ads run against the Base Sepolia ad server — not a mainnet launch.
 
 ```bash
 npx latent-protocol@beta init
