@@ -161,6 +161,29 @@ export class Loopback {
         return send(res, 200, { ok: true });
       }
 
+      if (route === "metric" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)) || "{}") as {
+          event?: string;
+          adId?: string;
+          cumulative_ms?: number;
+        };
+        // Forward viewability funnel events alongside the impression.
+        await fetch(`${cfg.server}/ad/metric`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ad_id: body.adId || "",
+            user_wallet: cfg.wallet,
+            event: body.event || "unknown",
+            ...(typeof body.cumulative_ms === "number"
+              ? { cumulative_ms: Math.round(body.cumulative_ms) }
+              : {}),
+          }),
+          signal: AbortSignal.timeout(3000),
+        }).catch(() => undefined);
+        return send(res, 200, { ok: true });
+      }
+
       send(res, 404, { error: "not found" });
     } catch {
       recordServerResult(false);

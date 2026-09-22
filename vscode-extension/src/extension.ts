@@ -1,9 +1,10 @@
 /**
  * Latent Protocol VS Code / Cursor extension.
  *
- * Two display paths, matching CodeBacks:
- *  - Non-invasive (default): a status-bar sponsor line + a sidebar "ad card",
- *    both fed by the local loopback. No third-party files touched.
+ * Three display paths:
+ *  - Non-invasive (default): a status-bar sponsor line + a sidebar "ad card" +
+ *    live earnings balance, all fed by the local loopback.
+ *  - Cursor overlay (opt-in): ad block in the Cursor agent composer area.
  *  - Advanced (opt-in): runtime-patch the Claude Code / Codex webview bundle so
  *    the sponsor line renders inside the agent's own spinner (reversible).
  */
@@ -12,16 +13,24 @@ import { loadConfig } from "./config.js";
 import { classifyWorkspace, type Category } from "./classify.js";
 import { Loopback } from "./loopback.js";
 import { buildBlock } from "./block.js";
+import { buildCursorBlock, CURSOR_MARK_START, CURSOR_MARK_END } from "./cursor-block.js";
 import { findAgentBundles, patch, restore, isPatched } from "./patcher.js";
 import { refreshKillswitch } from "./health.js";
 import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 import { cardHtml } from "./card.js";
+import { ViewabilityTracker, type MetricEvent } from "./metrics.js";
+import { EarningsStatusBar } from "./statusbar.js";
+import { runAllChecks } from "./conflict.js";
+import { installClaudeCliHook, removeClaudeCliHook, isLatentHookInstalled } from "./claude-cli.js";
+import { uninstallCleanup } from "./uninstall.js";
 
 let loopback: Loopback | null = null;
 let statusItem: vscode.StatusBarItem | null = null;
+let earningsBar: EarningsStatusBar | null = null;
 let rotateTimer: ReturnType<typeof setInterval> | null = null;
 let reassertTimer: ReturnType<typeof setInterval> | null = null;
 let category: Category = "general";
+let viewTracker: ViewabilityTracker | null = null;
 
 interface LoopAd {
   text: string;
@@ -32,6 +41,15 @@ interface LoopAd {
 
 function workspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+function emitMetric(event: MetricEvent, adId: string, extra?: Record<string, unknown>): void {
+  if (!loopback) return;
+  fetch(`${loopback.baseUrl}/metric`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event, adId, ...extra }),
+  }).catch(() => undefined);
 }
 
 async function fetchAd(): Promise<LoopAd | null> {
@@ -60,23 +78,28 @@ async function reportImpression(ad: LoopAd, displayedMs: number): Promise<void> 
 
 class SponsorViewProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(view: vscode.WebviewView): void {
-    // The card renders no JS — keep scripts off and no local resource roots so
-    // advertiser content can't reach anything.
     view.webview.options = { enableScripts: false, localResourceRoots: [] };
     let current: LoopAd | null = null;
     let shownAt = 0;
     const flush = () => {
-      if (current) void reportImpression(current, Date.now() - shownAt);
+      if (current) {
+        void reportImpression(current, Date.now() - shownAt);
+        viewTracker?.stop();
+      }
       current = null;
     };
     const render = async () => {
-      flush(); // credit the actual elapsed time of whatever was showing, not a guess
-      if (!view.visible) return; // collapsed/hidden sidebar — don't fetch or bill
+      flush();
+      if (!view.visible) return;
       const ad = await fetchAd();
       const cfg = loadConfig();
       view.webview.html = cardHtml(ad, cfg.wallet, view.webview.cspSource);
       current = ad;
       shownAt = Date.now();
+      if (ad && viewTracker) {
+        viewTracker.impressionRendered(ad.adId);
+        viewTracker.viewable();
+      }
     };
     void render();
     const iv = setInterval(render, Math.max(3000, loadConfig().rotateSeconds * 1000));
@@ -90,14 +113,16 @@ class SponsorViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-
 async function startStatusRotation(): Promise<void> {
   if (!statusItem) return;
   let current: LoopAd | null = null;
   let shownAt = 0;
   const cfg = loadConfig();
   const tick = async () => {
-    if (current) await reportImpression(current, Date.now() - shownAt);
+    if (current) {
+      await reportImpression(current, Date.now() - shownAt);
+      viewTracker?.stop();
+    }
     current = await fetchAd();
     if (current) {
       shownAt = Date.now();
@@ -106,6 +131,10 @@ async function startStatusRotation(): Promise<void> {
         ? current.url
         : "Latent Protocol — sponsored";
       statusItem!.show();
+      if (viewTracker) {
+        viewTracker.impressionRendered(current.adId);
+        viewTracker.viewable();
+      }
     } else {
       statusItem!.text = "💡 Latent";
       statusItem!.show();
@@ -136,7 +165,6 @@ async function applyBundlePatch(context: vscode.ExtensionContext, announce: bool
         : "Latent: no compatible bundle patched.";
     void vscode.window.showInformationMessage(msg);
   }
-  // Reassert every 60s in case the host extension updates/reverts.
   if (!reassertTimer) {
     reassertTimer = setInterval(() => {
       const cur = loadConfig();
@@ -166,8 +194,6 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
   if (!cfg.enabled) return;
   category = classifyWorkspace(workspaceRoot());
 
-  // Keep the shared killswitch fresh (the CLI hooks also do this; harmless to
-  // double up, and it covers the extension-only install).
   void refreshKillswitch(cfg.server);
   if (!killswitchTimer) {
     killswitchTimer = setInterval(() => void refreshKillswitch(loadConfig().server), 5 * 60_000);
@@ -177,9 +203,19 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
   loopback = new Loopback("vscode", () => category);
   await loopback.start();
 
+  // Viewability tracker — all events forwarded through the loopback
+  viewTracker = new ViewabilityTracker(emitMetric);
+
+  // Sponsor line (rotating)
   statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   context.subscriptions.push(statusItem);
   await startStatusRotation();
+
+  // Live earnings balance (persistent)
+  if (!earningsBar) {
+    earningsBar = new EarningsStatusBar(cfg.server, cfg.wallet);
+    earningsBar.start();
+  }
 
   if (cfg.patchAgentBundles) await applyBundlePatch(context, false);
 }
@@ -188,6 +224,10 @@ function stopDisplay(): void {
   if (rotateTimer) clearInterval(rotateTimer);
   rotateTimer = null;
   statusItem?.hide();
+  viewTracker?.stop();
+  viewTracker = null;
+  earningsBar?.stop();
+  earningsBar = null;
   loopback?.stop();
   loopback = null;
 }
@@ -223,6 +263,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void vscode.window.showErrorMessage("Latent: could not reach the ad server.");
       }
     }),
+    vscode.commands.registerCommand("latent.checkConflicts", () => {
+      const checks = runAllChecks();
+      const conflicts = checks.filter((c) => c.hasConflict);
+      if (conflicts.length === 0) {
+        void vscode.window.showInformationMessage("Latent: no hook conflicts detected.");
+      } else {
+        const msgs = conflicts.map((c) => c.message).join("\n");
+        void vscode.window.showWarningMessage(`Latent: ${conflicts.length} conflict(s):\n${msgs}`);
+      }
+    }),
+    vscode.commands.registerCommand("latent.installCliHook", async () => {
+      const result = installClaudeCliHook();
+      const msgs = {
+        "installed": "Latent: Claude CLI hook installed.",
+        "already-installed": "Latent: Claude CLI hook already active.",
+        "error": "Latent: failed to install Claude CLI hook.",
+      };
+      void vscode.window.showInformationMessage(msgs[result]);
+    }),
+    vscode.commands.registerCommand("latent.removeCliHook", () => {
+      const result = removeClaudeCliHook();
+      const msgs = {
+        "removed": "Latent: Claude CLI hook removed.",
+        "not-installed": "Latent: no Claude CLI hook to remove.",
+        "error": "Latent: failed to remove Claude CLI hook.",
+      };
+      void vscode.window.showInformationMessage(msgs[result]);
+    }),
   );
 
   await startDisplay(context);
@@ -230,5 +298,5 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
   stopDisplay();
-  // Leave bundle patches in place across reloads; `Latent: Restore` / uninstall removes them.
+  uninstallCleanup();
 }
