@@ -15,7 +15,7 @@ resolves to an unrelated package — use the GitHub form above until it is
 published, then this shortens to `npx latent-protocol init`.
 
 Detects Claude Code / Grok Build / Hermes / Hermes WebUI / OpenClaw, sets up a wallet, and
-patches every surface it finds (CLI plugin, WebUI DOM patch, statusLine, OpenClaw plugin).
+patches every surface it finds (CLI plugin, WebUI extension, statusLine, OpenClaw plugin).
 See the [dev plan](DEV_PLAN_NPX_HERMES.md) for architecture details.
 
 ---
@@ -140,7 +140,7 @@ not Hermes `ads.wallet` keys.
 | Response footer (CLI, TUI, Desktop chat) | `transform_llm_output` — a labelled "Sponsored" footer; Hermes applies it before the reply is stored and delivered, so the billed impression is the one shown | ✅ |
 | Hermes gateway (Telegram, Discord, …) | Same footer, platform-formatted | ✅ Same install as CLI |
 | Hermes Desktop status bar | Desktop Plugin SDK (`desktop/plugin.js`): one sponsored line, popover with CTA + dashboard link; impression once per creative, only while the window is visible | ✅ via `npx init` when a wallet is configured |
-| WebUI banner + footer | DOM patch (WebUI does **not** load Hermes plugins) | ✅ via `npx init` when `static/` is found |
+| WebUI footer | WebUI extension `latent-ads` (the WebUI does **not** load Hermes plugins) installed into its managed extension dir; the API origin goes into the documented `HERMES_WEBUI_CSP_CONNECT_EXTRA` in the WebUI `.env`. No WebUI source file is edited — manage it under Settings → Extensions | ✅ via `npx init` when `static/` is found (restart the WebUI) |
 
 `pre_llm_call` is deliberately **not** used: its return value is appended to the
 user's message and reaches only the model, never the user.

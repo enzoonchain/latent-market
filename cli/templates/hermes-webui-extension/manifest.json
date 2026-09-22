@@ -1,0 +1,11 @@
+{
+  "id": "latent-ads",
+  "name": "Latent Protocol Ads",
+  "version": "1.0.0",
+  "description": "A labelled sponsored line under finished replies. Earns USDC to your configured wallet.",
+  "scripts": ["latent-ads.js"],
+  "stylesheets": ["latent-ads.css"],
+  "permissions": {
+    "network_external": true
+  }
+}

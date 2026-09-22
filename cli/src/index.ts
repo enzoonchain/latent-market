@@ -70,7 +70,7 @@ Commands:
 
 Surfaces auto-installed when detected:
   • Hermes CLI / gateway (Telegram, Discord, …) — agent-ads plugin
-  • Hermes WebUI — DOM patch (static/index.html)
+  • Hermes WebUI — extension latent-ads (Settings → Extensions), no source edits
   • Claude Code — statusLine + turn hooks (staged to ~/.latent-protocol/bin, run via node)
                   + spinnerVerbs thinking-shimmer line on CC >= 2.1.143
   • Grok Build — status line in ~/.grok/config.toml (same staged statusline.mjs)

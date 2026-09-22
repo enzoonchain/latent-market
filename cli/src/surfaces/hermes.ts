@@ -6,13 +6,14 @@ import { deviceId, loadConfig, resolveServer, resolveWallet, saveConfig } from "
 import { isValidAddress } from "../wallet.js";
 import { templatePath } from "../pkg.js";
 import {
-  ensureWebuiCspConnectExtra,
-  patchWebuiCspSource,
-  patchWebuiCtlShCsp,
-  patchWebuiIndex,
-  patchWebuiLatentProxy,
-  unpatchWebuiIndex,
-} from "./hermes-webui-patch.js";
+  apiOrigin,
+  hasLegacyWebuiPatches,
+  installWebuiExtension,
+  removeCspConnectExtra,
+  removeLegacyWebuiPatches,
+  uninstallWebuiExtension,
+  webuiExtensionInstalled,
+} from "./hermes-webui.js";
 
 const PLUGIN_NAME = "agent-ads";
 function templateDir(): string {
@@ -49,7 +50,7 @@ function templateOnce(source: string, token: string, value: string): string {
 
 /** Templates __SERVER__/__WALLET__/__DEVICE_ID__ into the desktop/plugin.js template with
  * JSON.stringify (never naive string interpolation), matching the same
- * safety discipline hermes-webui-patch.ts uses for its injected JS. Written
+ * safety discipline hermes-webui.ts uses for the WebUI extension. Written
  * beside plugin.yaml/__init__.py so the Hermes Desktop app's plugin SDK
  * loader picks it up from the same ~/.hermes/plugins/agent-ads/ folder
  * ("one package, both SDKs" — see docs/PLUGIN.md). */
@@ -135,88 +136,88 @@ function enableHermesPlugin(): string {
   return patchConfigEnabled();
 }
 
-/** Patch nesquena/hermes-webui index.html (separate from CLI plugin — WebUI
- * runs its own agent loop and does not load hermes_agent.plugins).
- * Primary path is Node-native write — does not depend on Hermes venv pip. */
-function patchHermesWebui(): string {
+function webuiStaticDirs(): string[] {
   const detected = detectAgents();
   const cfg = loadConfig();
-  const wallet = resolveWallet(cfg);
-  const server = resolveServer(cfg);
-  const frequency = cfg.frequency ?? 1;
-
-  const staticDirs = [
+  return [
     detected.hermesWebuiStatic,
     findHermesWebuiStatic(),
     cfg.hermes_webui_static,
     process.env.HERMES_WEBUI_STATIC,
-    process.env.HERMES_WEBUI_ROOT
-      ? join(process.env.HERMES_WEBUI_ROOT, "static")
-      : "",
+    process.env.HERMES_WEBUI_ROOT ? join(process.env.HERMES_WEBUI_ROOT, "static") : "",
   ].filter((p, i, arr): p is string => Boolean(p) && arr.indexOf(p) === i);
+}
 
-  const errors: string[] = [];
+/** Origins older releases may have written into CSP config / source. */
+function latentOrigins(server: string): string[] {
+  return [...new Set([apiOrigin(server), "https://api.latentprotocol.xyz"])];
+}
 
-  for (const dir of staticDirs) {
-    if (!existsSync(join(dir, "index.html"))) {
-      errors.push(`${dir}: no index.html`);
-      continue;
-    }
-    const res = patchWebuiIndex({
-      staticDir: dir,
-      server,
-      wallet,
-      frequency,
-    });
-    if (res.ok) {
-      try {
-        saveConfig({ hermes_webui_static: dir });
-      } catch {
-        // ignore
-      }
-      const proxy = patchWebuiLatentProxy({ staticDir: dir, server });
-      // CSP widen kept as belt-and-suspenders; proxy is the reliable path.
-      ensureWebuiCspConnectExtra({
-        staticDir: dir,
-        server,
-        hermesHome: detectAgents().paths.hermesHome,
-      });
-      patchWebuiCspSource({ staticDir: dir, server });
-      patchWebuiCtlShCsp({ staticDir: dir, server });
-      const proxyLine = proxy.ok
-        ? `   Same-origin proxy: ${proxy.proxyPath}\n` +
-          `   server.py: ${proxy.serverPath}\n` +
-          `   -> ${proxy.origin}\n` +
-          proxy.notes.map((n) => `   • ${n}`).join("\n")
-        : `   ⚠️  Proxy patch failed: ${proxy.error}`;
-      return (
-        `✅ Hermes WebUI patched (node → ${dir})\n` +
-        `   Patched: ${res.indexPath}\n` +
-        `${proxyLine}\n` +
-        "   REQUIRED next steps:\n" +
-        "   1) Restart WebUI:  cd ~/hermes-webui && ./ctl.sh restart\n" +
-        "   2) Verify proxy locally:\n" +
-        `      curl -sS -X POST http://127.0.0.1:PORT/api/latent/ad/request -H 'Content-Type: application/json' -d '{"user_wallet":"0x0","agent":"hermes","context":"test"}'\n` +
-        "   3) Hard-refresh: Ctrl+Shift+R\n" +
-        "   4) Console: version 7; Network POST /api/latent/ad/request -> 200 + Sponsored footer"
-      );
-    }
-    errors.push(`${dir}: ${res.error}`);
-  }
+/** Older releases also appended the CSP origin to ~/.hermes/.env (the agent's
+ *  env, which the WebUI never reads for CSP). */
+function cleanHermesHomeEnv(server: string): string | null {
+  const envPath = join(detectAgents().paths.hermesHome, ".env");
+  return removeCspConnectExtra(envPath, latentOrigins(server))
+    ? `✅ Removed the stale Latent CSP entry from ${envPath}`
+    : null;
+}
 
-  if (staticDirs.length === 0) {
-    return (
-      "ℹ️  Hermes WebUI not patched (static/ not found after deep scan).\n" +
-      "   Set once and re-init:\n" +
-      "   HERMES_WEBUI_ROOT=/path/to/hermes-webui npx latent-protocol init --yes"
+function legacyCleanupLines(staticDir: string, server: string): string[] {
+  const cleaned = removeLegacyWebuiPatches(staticDir, latentOrigins(server));
+  if (cleaned.length === 0) return [];
+  return [
+    "🔒 Removed source edits made by an older latent-protocol release (auth/CSRF",
+    "   exemptions and an unauthenticated proxy). Restart the WebUI to unload them:",
+    ...cleaned.map((f) => `   • ${f}`),
+  ];
+}
+
+/** nesquena/hermes-webui runs its own agent loop and does not load Hermes
+ *  plugins, so it gets a WebUI extension (see hermes-webui.ts). */
+function installHermesWebuiSurface(): string {
+  const cfg = loadConfig();
+  const wallet = resolveWallet(cfg);
+  const server = resolveServer(cfg);
+  const staticDirs = webuiStaticDirs();
+  const lines: string[] = [];
+  const homeEnv = cleanHermesHomeEnv(server);
+  if (homeEnv) lines.push(homeEnv);
+
+  const dir = staticDirs.find((d) => existsSync(join(d, "index.html")));
+  if (!dir) {
+    lines.push(
+      "ℹ️  Hermes WebUI not found (static/ not found after deep scan).\n" +
+        "   Set once and re-init:\n" +
+        "   HERMES_WEBUI_ROOT=/path/to/hermes-webui npx latent-protocol init --yes",
     );
+    return lines.join("\n");
   }
+  try {
+    saveConfig({ hermes_webui_static: dir });
+  } catch {
+    // ignore
+  }
+  lines.push(...legacyCleanupLines(dir, server));
 
-  return (
-    `⚠️  Hermes WebUI found but patch failed.\n` +
-    errors.map((e) => `   • ${e}`).join("\n") +
-    "\n   Check file permissions on index.html, then retry init."
+  const res = installWebuiExtension({
+    staticDir: dir,
+    server,
+    wallet,
+    deviceId: deviceId(),
+    frequency: cfg.frequency ?? 1,
+  });
+  if (!res.ok) {
+    lines.push(`⚠️  Hermes WebUI: ${res.error}`);
+    return lines.join("\n");
+  }
+  lines.push(
+    `✅ Hermes WebUI extension installed → ${res.dir}`,
+    `   CSP: ${res.csp}`,
+    "   Restart the WebUI (./ctl.sh restart) so it reads .env, then reload the page.",
+    "   Manage it under Settings → Extensions (Latent Protocol Ads).",
   );
+  if (!wallet) lines.push("   ℹ️  No wallet configured yet — the extension stays idle until one is set.");
+  return lines.join("\n");
 }
 
 export function installHermes(): string {
@@ -243,7 +244,7 @@ export function installHermes(): string {
       "ℹ️  Hermes home not found — installing WebUI DOM patch only (CLI plugin skipped).",
     );
   }
-  lines.push(patchHermesWebui());
+  lines.push(installHermesWebuiSurface());
   return lines.join("\n");
 }
 
@@ -265,22 +266,25 @@ function removeFromConfigEnabled(): string {
   }
 }
 
-function unpatchHermesWebui(): string {
-  const staticDir =
-    detectAgents().hermesWebuiStatic ||
-    findHermesWebuiStatic() ||
-    loadConfig().hermes_webui_static;
-  if (!staticDir) {
-    return "ℹ️  Hermes WebUI patch not removed (static/ not found).";
+function uninstallHermesWebuiSurface(): string {
+  const server = resolveServer(loadConfig());
+  const lines: string[] = [];
+  const homeEnv = cleanHermesHomeEnv(server);
+  if (homeEnv) lines.push(homeEnv);
+  const dirs = webuiStaticDirs().filter((d) => existsSync(join(d, "index.html")));
+  for (const dir of dirs) {
+    lines.push(...legacyCleanupLines(dir, server));
+    lines.push(...uninstallWebuiExtension({ staticDir: dir, server }));
   }
-  const res = unpatchWebuiIndex(staticDir);
-  if (res.ok) return `✅ Hermes WebUI: ${res.message}`;
-  return `⚠️  Hermes WebUI unpatch failed: ${res.error}`;
+  if (lines.length === 0) lines.push("ℹ️  Hermes WebUI: nothing to remove.");
+  return lines.join("\n");
 }
 
 export function uninstallHermes(): string {
   const { paths, hermes } = detectAgents();
-  if (!hermes) return "ℹ️  Hermes not detected; nothing to remove.";
+  // The WebUI cleanup must run even without a Hermes CLI home: it removes
+  // auth/CSRF exemptions that older releases wrote into WebUI source.
+  if (!hermes) return uninstallHermesWebuiSurface();
 
   const dest = join(paths.hermesPlugins, PLUGIN_NAME);
   const lines: string[] = [];
@@ -297,30 +301,24 @@ export function uninstallHermes(): string {
   } else {
     lines.push(removeFromConfigEnabled());
   }
-  lines.push(unpatchHermesWebui());
+  lines.push(uninstallHermesWebuiSurface());
   return lines.join("\n");
 }
 
-function webuiPatchStatus(): string {
-  const staticDir = findHermesWebuiStatic();
-  if (!staticDir) {
-    return "Hermes WebUI: not found (set HERMES_WEBUI_ROOT to enable patch)";
+function webuiStatus(): string {
+  const dir = webuiStaticDirs().find((d) => existsSync(join(d, "index.html")));
+  if (!dir) return "Hermes WebUI: not found (set HERMES_WEBUI_ROOT to enable)";
+  if (hasLegacyWebuiPatches(dir)) {
+    return `Hermes WebUI: ⚠️  old source patch present (${dir}) — re-run init or uninstall to remove it`;
   }
-  const index = join(staticDir, "index.html");
-  try {
-    const html = readFileSync(index, "utf8");
-    if (html.includes("latent-protocol-webui-patch")) {
-      return `Hermes WebUI: patched (${index})`;
-    }
-    return `Hermes WebUI: found, not patched (${staticDir})`;
-  } catch {
-    return `Hermes WebUI: found, unreadable (${staticDir})`;
-  }
+  return webuiExtensionInstalled(dir)
+    ? `Hermes WebUI: extension installed (${dir})`
+    : `Hermes WebUI: found, extension not installed (${dir})`;
 }
 
 export function hermesStatus(): string {
   const { hermes, paths } = detectAgents();
-  if (!hermes) return "Hermes: not detected";
+  if (!hermes) return `Hermes: not detected\n  ${webuiStatus()}`;
   const dest = join(paths.hermesPlugins, PLUGIN_NAME);
   const flat = existsSync(join(dest, "plugin.yaml"));
   const configPath = join(paths.hermesHome, "config.yaml");
@@ -336,5 +334,5 @@ export function hermesStatus(): string {
   else if (flat) cli = "Hermes: plugin dir present, not confirmed enabled";
   else if (enabled) cli = "Hermes: enabled in config (entry-point / external install)";
   else cli = "Hermes: detected, not patched";
-  return `${cli}\n  ${webuiPatchStatus()}`;
+  return `${cli}\n  ${webuiStatus()}`;
 }
