@@ -2,9 +2,14 @@
   "name": "latent-protocol-vscode",
   "displayName": "Latent Protocol — Sponsored Spinner",
   "description": "Earn USDC while your coding agent thinks. Shows a labeled sponsor line in the agent's spinner/status area (Cursor, VS Code, Claude Code, Codex).",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "latent-protocol",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enzoonchain/latent-market.git",
+    "directory": "vscode-extension"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -36,6 +41,18 @@
       {
         "command": "latent.showEarnings",
         "title": "Latent: Show earnings"
+      },
+      {
+        "command": "latent.checkConflicts",
+        "title": "Latent: Check for hook conflicts"
+      },
+      {
+        "command": "latent.installCliHook",
+        "title": "Latent: Install Claude CLI hook"
+      },
+      {
+        "command": "latent.removeCliHook",
+        "title": "Latent: Remove Claude CLI hook"
       }
     ],
     "configuration": {
@@ -65,6 +82,11 @@
           "type": "number",
           "default": 10,
           "description": "How often the shown sponsor line rotates."
+        },
+        "latent.cursorOverlay": {
+          "type": "boolean",
+          "default": false,
+          "description": "Experimental, Cursor only: show the sponsor line in the agent composer area. Adds one script tag to Cursor's workbench.html (pristine backup kept, restored on disable/uninstall); Cursor may report its installation as modified while this is on. Re-applied after Cursor updates."
         }
       }
     },
@@ -83,6 +105,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc -p ./ --noEmit",
     "vscode:prepublish": "npm run typecheck && npm run build",
+    "vscode:uninstall": "node ./dist/uninstall.js",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -91,5 +114,8 @@
     "esbuild": "^0.24.2",
     "typescript": "^5.7.0",
     "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
   }
 }

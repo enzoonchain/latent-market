@@ -1,5 +1,5 @@
 /**
- * Bundle the extension to a single dist/extension.js (CommonJS — VS Code loads
+ * Bundle the extension to a single dist/extension.js (+ dist/uninstall.js) (CommonJS — VS Code loads
  * extensions as CJS). `vscode` is provided by the host and must stay external;
  * everything else is inlined so the packaged .vsix carries no node_modules.
  */
@@ -8,8 +8,10 @@ import { build } from "esbuild";
 const watch = process.argv.includes("--watch");
 
 const options = {
-  entryPoints: ["src/extension.ts"],
-  outfile: "dist/extension.js",
+  // extension.js is the extension; uninstall.js is the `vscode:uninstall`
+  // script (runs in plain node after uninstall — must not import `vscode`).
+  entryPoints: { extension: "src/extension.ts", uninstall: "src/uninstall-main.ts" },
+  outdir: "dist",
   bundle: true,
   platform: "node",
   format: "cjs",
@@ -25,5 +27,5 @@ if (watch) {
   console.log("watching…");
 } else {
   await build(options);
-  console.log("bundled → dist/extension.js");
+  console.log("bundled → dist/extension.js, dist/uninstall.js");
 }

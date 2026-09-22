@@ -5,3 +5,6 @@ tsconfig.json
 **/*.map
 **/*.ts
 !dist/**
+esbuild.mjs
+test/**
+vitest.config.*

@@ -44,6 +44,22 @@ describe("cardHtml", () => {
     expect(html).toMatch(/<a href="https:\/\/acme\.example\/x\?a=&quot;b&quot;&amp;c=&lt;d&gt;"/);
   });
 
+  it("prefers the loopback /click chain over the raw cta_url", () => {
+    const html = cardHtml(
+      { text: "Try Acme", url: "https://acme.example", clickHref: "http://127.0.0.1:5123/cb/t/click?adId=a1" },
+      "0xabc",
+    );
+    expect(html).toMatch(/<a href="http:\/\/127\.0\.0\.1:5123\/cb\/t\/click\?adId=a1"/);
+  });
+
+  it("ignores a non-loopback clickHref (injection guard)", () => {
+    const html = cardHtml(
+      { text: "Try Acme", url: "javascript:alert(1)", clickHref: "https://evil.example/steal" },
+      "0xabc",
+    );
+    expect(html).not.toMatch(/<a\s+href=/i);
+  });
+
   it("HTML-escapes and control-strips the ad text", () => {
     const html = cardHtml(
       { text: "<img src=x onerror=alert(1)>\x1b[2J\x9b31m", url: "" },
@@ -65,5 +81,16 @@ describe("sanitizeText", () => {
     expect(CTRL.test(sanitizeText("a\x1b[31mbc"))).toBe(false);
     expect(sanitizeText("x".repeat(100), 10).length).toBeLessThanOrEqual(10);
     expect(sanitizeText("plain ok")).toBe("plain ok");
+  });
+});
+
+describe("cardHtml loopback check", () => {
+  it("does not accept a 127.0.0.1-prefixed foreign host as the click chain", () => {
+    const html = cardHtml(
+      { text: "t", url: "https://adv.example/a", clickHref: "http://127.0.0.1.evil.com/x" },
+      "",
+    );
+    expect(html).not.toContain("evil.com");
+    expect(html).toContain('href="https://adv.example/a"');
   });
 });
