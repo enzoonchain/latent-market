@@ -57,7 +57,7 @@ test("pollDeviceToken waits through pending, slows down, then returns the token"
   const sleeps = [];
   const fetchImpl = async (_url, init) => {
     const body = JSON.parse(init.body);
-    assert.equal(body.grant_type, "device_code");
+    assert.equal(body.grant_type, "urn:ietf:params:oauth:grant-type:device_code");
     assert.equal(body.device_code, "devcode");
     calls.push(1);
     if (calls.length === 1) return jsonRes(400, { error: "authorization_pending" });
@@ -147,6 +147,17 @@ test("startDeviceAuth only blames the dashboard when Privy says so", async () =>
   await assert.rejects(() => startDeviceAuth("clid", proxied), (err) => {
     assert.match(err.message, /proxy or VPN/);
     assert.doesNotMatch(err.message, /access is off/);
+    return true;
+  });
+});
+
+test("startDeviceAuth recognizes Privy's real toggle-off response", async () => {
+  // Verbatim from auth.privy.io with CLI/agent access disabled.
+  const off = async () =>
+    jsonRes(403, { error: "Device authorization is not enabled for this app" });
+  await assert.rejects(() => startDeviceAuth("clid", off), (err) => {
+    assert.match(err.message, /CLI\/agent access is off/);
+    assert.doesNotMatch(err.message, /proxy or VPN/);
     return true;
   });
 });

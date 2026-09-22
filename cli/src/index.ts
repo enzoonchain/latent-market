@@ -50,7 +50,7 @@ function printHelp(): void {
   console.log(`latent-protocol — earn USDC while your agent thinks
 
 Usage:
-  npx latent-protocol init [--yes] [--wallet 0x…] [--email you@domain] [--server URL]
+  npx latent-protocol init [--yes] [--wallet 0x…] [--email you@domain] [--no-browser] [--server URL]
   npx latent-protocol status
   npx latent-protocol uninstall
   npx latent-protocol statusline [--install|--uninstall]
@@ -111,6 +111,9 @@ function parseFlags(args: string[]): {
       email = args[++i];
     } else if (a.startsWith("--email=")) {
       email = a.slice("--email=".length);
+    } else if (a === "--no-browser") {
+      // Read by openInBrowser(); an env var so prelaunch picks it up too.
+      process.env.LATENT_NO_BROWSER = "1";
     } else if (a === "--server") {
       server = args[++i];
     } else if (a.startsWith("--server=")) {

@@ -125,3 +125,28 @@ test("the bundled CLI rejects the removed --generate flag instead of minting a k
   assert.match(res.stderr, /--generate was removed/);
   assert.doesNotMatch(res.stdout + res.stderr, /Private key/i);
 });
+
+test("piped answers all reach init — none dropped between prompts", () => {
+  // Regression: rl.question() dropped a line that arrived before its prompt,
+  // so `printf 'y\n3\n0x…\n' | init` answered the first question and hung.
+  const home = mkdtempSync(join(tmpdir(), "latent-pipe-"));
+  mkdirSync(join(home, ".latent-protocol"), { recursive: true });
+  writeFileSync(
+    join(home, ".latent-protocol", "config.json"),
+    JSON.stringify({ wallet: "0x1111111111111111111111111111111111111111" }),
+  );
+  const wallet = "0x7331003C29a8Db67E141dD39964B205598b60bcf";
+  const res = spawnSync(
+    process.execPath,
+    [dist("index.js"), "prelaunch", "--skip-register"],
+    {
+      encoding: "utf8",
+      input: `y\n3\n${wallet}\n`,
+      env: { ...process.env, HOME: home, LATENT_NO_BROWSER: "1" },
+      timeout: 20000,
+    },
+  );
+  assert.equal(res.status, 0, res.stderr);
+  const cfg = JSON.parse(readFileSync(join(home, ".latent-protocol", "config.json"), "utf8"));
+  assert.equal(cfg.wallet, wallet);
+});
