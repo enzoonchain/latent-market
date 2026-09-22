@@ -1,0 +1,71 @@
+name: Release VS Code / Cursor extension (VSIX)
+
+# Builds `vscode-extension/` into a VSIX and attaches it to the GitHub Release
+# as `latent-protocol-vscode.vsix` (+ a `.sha256`). `latent init` installs the
+# extension from the newest `vscode-v*` release that carries that asset
+# (cli/src/surfaces/vscode.ts), so the asset name is a contract — keep it.
+#
+# Trigger: a GitHub Release whose tag is `vscode-v<semver>` (e.g. vscode-v0.2.0),
+# or a manual run against an existing tag. The tag version must match
+# vscode-extension/package.json's version or the job fails before uploading.
+# `cli-v*` releases are ignored here (publish.yml handles those) — and vice
+# versa, publish.yml only runs for `cli-v*`.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing vscode-v* release tag to (re)build and attach the VSIX to"
+        required: true
+        type: string
+
+permissions:
+  contents: write # gh release upload
+
+jobs:
+  vsix:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'vscode-v')
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify tag matches package version
+        run: |
+          case "$TAG" in vscode-v*) ;; *) echo "::error::tag $TAG is not vscode-v*"; exit 1;; esac
+          PKG=$(node -p "require('./vscode-extension/package.json').version")
+          if [ "$PKG" != "${TAG#vscode-v}" ]; then
+            echo "::error::release tag $TAG != vscode-extension/package.json version $PKG"
+            exit 1
+          fi
+
+      - name: Install, typecheck, test
+        run: |
+          npm ci --prefix vscode-extension
+          npm run typecheck --prefix vscode-extension
+          npm test --prefix vscode-extension
+
+      - name: Package VSIX
+        working-directory: vscode-extension
+        run: |
+          # vscode:prepublish runs typecheck + build. Dependencies are bundled
+          # by esbuild, so the VSIX ships no node_modules.
+          npx --yes @vscode/vsce@3 package --no-dependencies -o latent-protocol-vscode.vsix
+          unzip -l latent-protocol-vscode.vsix | grep -q "extension/dist/uninstall.js" \
+            || { echo "::error::VSIX is missing dist/uninstall.js (vscode:uninstall)"; exit 1; }
+          sha256sum latent-protocol-vscode.vsix | cut -d' ' -f1 > latent-protocol-vscode.vsix.sha256
+
+      - name: Attach to release
+        working-directory: vscode-extension
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" latent-protocol-vscode.vsix latent-protocol-vscode.vsix.sha256 --clobber
