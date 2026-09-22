@@ -1,0 +1,342 @@
+<!doctype html>
+<html><body><div id="app"></div>
+
+<!-- latent-protocol-webui-patch -->
+<script>
+(function () {
+  'use strict';
+
+  var SERVER   = 'https://api.latentprotocol.xyz';
+  // Prefer /api/latent (usually reverse-proxied); /__latent__ is fallback.
+  var PROXIES  = ['/api/latent', '/__latent__'];
+  var WALLET   = '0xabababababababababababababababababababab' || localStorage.getItem('latent_wallet') || '';
+  var FREQ     = 1;
+  var _turns   = 0;
+  var _busy    = false;
+  var _banner  = null;
+  var _lastKey = '';
+  var _proxy   = PROXIES[0];
+  var MONEY    = '\uD83D\uDCB0';
+
+  window.__LATENT_WEBUI__ = {
+    server: SERVER,
+    proxy: _proxy,
+    proxies: PROXIES,
+    wallet: WALLET ? (WALLET.slice(0, 6) + '...') : '',
+    frequency: FREQ,
+    version: 7
+  };
+
+  if (!WALLET) {
+    console.warn('[latent-protocol] no wallet - WebUI ads disabled. Re-run init.');
+    return;
+  }
+
+  console.info('[latent-protocol] WebUI ads active', window.__LATENT_WEBUI__);
+
+  var _fetchWarned = false;
+  function _postOnce(base, path, body) {
+    return fetch(base + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      // Include session cookie so Hermes auth passes if proxy hook misses.
+      credentials: 'include'
+    }).then(function (r) {
+      if (!r) return { ad: null, status: 0, base: base };
+      if (r.status === 204) return { ad: null, status: 204, base: base };
+      if (!r.ok) {
+        return r.text().then(function (t) {
+          return { ad: null, status: r.status, base: base, body: String(t || '').slice(0, 160) };
+        }).catch(function () {
+          return { ad: null, status: r.status, base: base };
+        });
+      }
+      return r.json().then(function (ad) {
+        return { ad: ad, status: r.status, base: base };
+      }).catch(function () {
+        return { ad: null, status: r.status, base: base, body: 'invalid-json' };
+      });
+    }).catch(function (err) {
+      return { ad: null, status: 0, base: base, body: String(err && err.message || err || 'fetch-failed') };
+    });
+  }
+  function _post(path, body) {
+    var bases = [_proxy].concat(PROXIES.filter(function (p) { return p !== _proxy; }));
+    var i = 0;
+    function next() {
+      if (i >= bases.length) return Promise.resolve(null);
+      var base = bases[i++];
+      return _postOnce(base, path, body).then(function (res) {
+        if (res.ad) {
+          _proxy = res.base;
+          window.__LATENT_WEBUI__.proxy = _proxy;
+          return res.ad;
+        }
+        // 404/502 on proxy path -> try next base; 204 means no fill.
+        if (res.status === 204) return null;
+        if (res.status === 404 || res.status === 502 || res.status === 0) {
+          if (!_fetchWarned) {
+            console.warn('[latent-protocol] proxy miss', res.status, res.base + path, res.body || '');
+          }
+          return next();
+        }
+        if (!_fetchWarned) {
+          _fetchWarned = true;
+          console.warn('[latent-protocol] ad HTTP', res.status, res.base + path, res.body || '');
+        }
+        return null;
+      });
+    }
+    return next().then(function (ad) {
+      if (!ad && !_fetchWarned) {
+        _fetchWarned = true;
+        console.warn(
+          '[latent-protocol] no ad from proxies', PROXIES,
+          '- check server.py hook + api/latent_ads_proxy.py, then ctl.sh restart'
+        );
+      }
+      return ad;
+    });
+  }
+
+  function _fetchAd(ctx) {
+    return _post('/ad/request', {
+      user_wallet: WALLET,
+      agent: 'hermes',
+      context: String(ctx || 'webui').slice(0, 100),
+      surface: 'webui_footer',
+      tags: []
+    });
+  }
+
+  function _logImpression(ad) {
+    if (!ad) return;
+    var id = ad.ad_id || ad.id || '';
+    if (!id) return;
+    _post('/ad/impression', {
+      ad_id: id,
+      user_wallet: WALLET,
+      token: ad.impression_token || '',
+      agent: 'hermes',
+      surface: 'webui_footer',
+      context: String(_ctx()).slice(0, 100)
+    });
+  }
+
+  function _ctx() {
+    var nodes = document.querySelectorAll(
+      '.msg-row[data-role="user"] .msg-body, .user-turn .msg-body, .user-segment .msg-body'
+    );
+    var last = nodes.length ? nodes[nodes.length - 1] : null;
+    return last && last.textContent ? last.textContent.trim() : 'webui';
+  }
+
+  function _thinkingEl() {
+    return document.querySelector(
+      '.agent-activity-thinking[data-thinking-active="1"],' +
+      '.agent-activity-thinking[data-live-thinking="1"],' +
+      '.thinking[data-thinking-active="1"]'
+    );
+  }
+
+  function _isLive(el) {
+    if (!el || !el.closest) return false;
+    return !!(
+      el.closest('#liveAssistantTurn') ||
+      el.closest('[data-live-assistant-turn="1"]') ||
+      el.closest('.msg-body.stream-fade-active') ||
+      el.querySelector('.msg-body.stream-fade-active, .stream-fade-word')
+    );
+  }
+
+  function _turnKey(host) {
+    if (!host) return '';
+    var idx = host.getAttribute('data-msg-idx') || '';
+    var body = host.querySelector('.msg-body');
+    var text = body && body.textContent ? body.textContent.trim().slice(0, 80) : '';
+    return idx + '|' + text.length + '|' + text.slice(0, 24);
+  }
+
+  function _latestSettledHost() {
+    var turns = document.querySelectorAll(
+      '.assistant-turn, .msg-row[data-role="assistant"], .assistant-segment'
+    );
+    for (var i = turns.length - 1; i >= 0; i--) {
+      var t = turns[i];
+      if (!t || _isLive(t)) continue;
+      if (t.querySelector && t.querySelector('.latent-ad-footer')) continue;
+      var body = t.querySelector('.msg-body');
+      if (!body || !(body.textContent || '').trim()) continue;
+      var text = body.textContent || '';
+      if (text.indexOf('Sponsored:') !== -1 || text.indexOf(MONEY + ' Sponsored') !== -1) continue;
+      return t;
+    }
+    return null;
+  }
+
+  function _esc(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function _adHtml(ad, persistent) {
+    var earn = ad.earn_amount != null
+      ? ' | <span style="color:#34d399">+$' + parseFloat(ad.earn_amount).toFixed(4) + ' USDC</span>'
+      : '';
+    var cta = ad.cta_url
+      ? '<a href="' + _esc(ad.cta_url) + '" target="_blank" rel="noopener noreferrer" '
+        + 'style="color:#60a5fa;text-decoration:none;white-space:nowrap">'
+        + _esc(ad.cta_text || 'Learn more') + ' -></a>'
+      : '';
+    var label = persistent ? (MONEY + ' Sponsored') : 'Sponsored';
+    return '<span style="color:#f59e0b;font-size:10px;letter-spacing:.06em;'
+      + 'text-transform:uppercase;flex-shrink:0">' + label + '</span>'
+      + '<span style="flex:1;color:inherit">' + _esc(ad.body || ad.title || '') + '</span>'
+      + cta + earn;
+  }
+
+  function _styleBox() {
+    return 'margin:8px 0 4px;padding:8px 12px;border:1px solid rgba(251,191,36,.35);'
+      + 'background:rgba(251,191,36,.08);border-radius:6px;font-size:12px;'
+      + 'display:flex;align-items:center;gap:8px;opacity:.95;line-height:1.45;'
+      + 'max-width:var(--msg-max, 720px);margin-left:var(--msg-rail, 0);'
+      + 'position:relative;z-index:5';
+  }
+
+  function _renderThinkingBanner(ad, container) {
+    if (!ad || !container) return;
+    if (container.querySelector('.latent-ad')) return;
+    var el = document.createElement('div');
+    el.className = 'latent-ad';
+    el.style.cssText = _styleBox();
+    el.innerHTML = _adHtml(ad, false);
+    container.appendChild(el);
+    _banner = el;
+  }
+
+  function _attachFooter(ad, host) {
+    if (!ad || !host) return false;
+    if (host.querySelector('.latent-ad-footer')) return true;
+    var el = document.createElement('div');
+    el.className = 'latent-ad-footer';
+    el.setAttribute('data-latent-ad', ad.ad_id || ad.id || '');
+    el.style.cssText = _styleBox();
+    el.innerHTML = _adHtml(ad, true);
+    var foot = host.querySelector('.msg-foot');
+    var body = host.querySelector('.msg-body');
+    if (foot && foot.parentNode) {
+      foot.parentNode.insertBefore(el, foot);
+    } else if (body && body.parentNode) {
+      body.parentNode.insertBefore(el, body.nextSibling);
+    } else {
+      host.appendChild(el);
+    }
+    _logImpression(ad);
+    console.info('[latent-protocol] footer attached', ad.ad_id || ad.id);
+    return true;
+  }
+
+  function _clearBanner() {
+    if (_banner) { _banner.remove(); _banner = null; }
+  }
+
+  function _serveTurn(reason) {
+    if (_busy) return;
+    var host = _latestSettledHost();
+    if (!host) return;
+    var key = _turnKey(host);
+    if (!key || key === _lastKey) return;
+    _turns++;
+    if ((_turns - 1) % FREQ !== 0) {
+      _lastKey = key;
+      return;
+    }
+    _busy = true;
+    var ctx = _ctx();
+    _fetchAd(ctx).then(function (ad) {
+      _busy = false;
+      // Always consume the turn key so CSP/empty responses do not retry-spam.
+      _lastKey = key;
+      if (!ad) {
+        console.info('[latent-protocol] no ad for turn', reason, ctx.slice(0, 40));
+        return;
+      }
+      var h = _latestSettledHost() || host;
+      _attachFooter(ad, h);
+    });
+  }
+
+  var _wasThinking = false;
+  var _pendingThinkAd = null;
+
+  function _onThinkingStart() {
+    _fetchAd(_ctx()).then(function (ad) {
+      if (!ad) return;
+      _pendingThinkAd = ad;
+      var el = _thinkingEl();
+      if (el) _renderThinkingBanner(ad, el);
+    });
+  }
+
+  function _onThinkingEnd() {
+    _clearBanner();
+    if (_pendingThinkAd) {
+      var ad = _pendingThinkAd;
+      _pendingThinkAd = null;
+      var tries = 0;
+      (function attempt() {
+        var host = _latestSettledHost();
+        if (host && _attachFooter(ad, host)) {
+          _lastKey = _turnKey(host);
+          return;
+        }
+        tries++;
+        if (tries < 12) setTimeout(attempt, 200);
+        else _serveTurn('think-end-fallback');
+      })();
+    } else {
+      _serveTurn('think-end');
+    }
+  }
+
+  var obs = new MutationObserver(function () {
+    var el = _thinkingEl();
+    var active = !!el;
+    if (active && !_wasThinking) _onThinkingStart();
+    else if (!active && _wasThinking) _onThinkingEnd();
+    else if (active && _pendingThinkAd && el && !el.querySelector('.latent-ad')) {
+      _renderThinkingBanner(_pendingThinkAd, el);
+    }
+    _wasThinking = active;
+    if (!_isLive(document.body)) _serveTurn('mutation');
+  });
+
+  function _start() {
+    obs.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        'data-thinking-active',
+        'data-live-thinking',
+        'data-live-assistant-turn',
+        'data-latest-assistant-response',
+        'class'
+      ]
+    });
+    setInterval(function () { _serveTurn('poll'); }, 1500);
+    _serveTurn('boot');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _start);
+  } else {
+    _start();
+  }
+})();
+</script>
+</body></html>

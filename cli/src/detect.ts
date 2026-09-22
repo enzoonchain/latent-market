@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { webuiExtensionInstalled } from "./surfaces/hermes-webui.js";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -76,14 +77,7 @@ export function looksLikeHermesWebuiStatic(staticDir: string): boolean {
 }
 
 function isPatched(staticDir: string | null): boolean {
-  if (!staticDir) return false;
-  try {
-    return readFileSync(join(staticDir, "index.html"), "utf8").includes(
-      "latent-protocol-webui-patch",
-    );
-  } catch {
-    return false;
-  }
+  return staticDir ? webuiExtensionInstalled(staticDir) : false;
 }
 
 function pushUnique(out: string[], dir: string | null | undefined): void {
@@ -386,7 +380,7 @@ export function detectAgents(): DetectedAgents {
 export function formatDetectionTable(d: DetectedAgents): string {
   const webuiStatus = d.hermesWebui
     ? d.hermesWebuiPatched
-      ? "patched"
+      ? "extension installed"
       : "detected"
     : "not found";
   const rows: [string, string, string][] = [
@@ -437,13 +431,13 @@ export function formatSurfaceMatrix(d: DetectedAgents): string {
   const webui = !d.hermesWebui
     ? "skipped (static/ not found — set HERMES_WEBUI_ROOT)"
     : d.hermesWebuiPatched
-      ? `patched ✅ (${d.hermesWebuiStatic})`
-      : `found, NOT patched (${d.hermesWebuiStatic})`;
+      ? `extension latent-ads ✅ (${d.hermesWebuiStatic})`
+      : `found, extension NOT installed (${d.hermesWebuiStatic})`;
 
   const lines = [
     "Surface coverage after install:",
     `  • Hermes CLI / gateway (Telegram, Discord, …): ${d.hermes ? "plugin agent-ads" : "skipped"}`,
-    `  • Hermes Desktop (\`hermes desktop\`):          ${d.hermes ? "same agent-ads plugin + status-bar chip" : "skipped"}`,
+    `  • Hermes Desktop (\`hermes desktop\`):          ${d.hermes ? "same agent-ads plugin + status-bar sponsored line" : "skipped"}`,
     `  • Hermes WebUI (browser / Tailscale):         ${webui}`,
     `  • Claude Code:                                ${d.claudeCode ? "statusLine" : "skipped"}`,
     `  • Grok Build:                                 ${d.grok ? "status line (config.toml)" : "skipped"}`,
