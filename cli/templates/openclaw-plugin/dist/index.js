@@ -1,39 +1,28 @@
 /**
  * Latent Protocol — OpenClaw plugin entry point.
  *
- * Earn USDC from sponsored ads while your agent thinks. Three surfaces, in
- * priority order:
- *   1. thinking-state injection  (before_prompt_build)  — primary
- *   2. response footer           (message_sending)      — fallback
- *   3. session welcome banner    (session_start)        — once per session
- *
- * Surfaces 1 and 2 share one frequency counter and a turn ledger so a turn
- * never serves two ads. See hooks/turn-ledger.ts for the coordination rules.
+ * Earn USDC from one labelled sponsored footer under the agent's final reply,
+ * on every channel OpenClaw bridges. Ads are shown to people, never fed to the
+ * model: see hooks/reply-footer.ts for the surface and billing rules.
  */
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getConfig } from "./lib/config.js";
-import { SessionFrequency } from "./lib/footer.js";
-import { TurnLedger } from "./hooks/turn-ledger.js";
-import { registerThinkingHook } from "./hooks/thinking-inject.js";
-import { registerFooterHook } from "./hooks/message-footer.js";
-import { registerSessionHook } from "./hooks/session-start.js";
+import { registerReplyFooter } from "./hooks/reply-footer.js";
+import { registerAdsCommand } from "./commands/ads.js";
 export default definePluginEntry({
     id: "latent-protocol",
     name: "Latent Protocol",
-    description: "Earn USDC from sponsored ads injected into your agent's thinking state. " +
+    description: "Earn USDC from a labelled sponsored footer under the agent's final reply. " +
         "Open ad marketplace for AI agents on Base.",
     register(api) {
-        const config = getConfig(api.config);
+        // `api.config` is the whole OpenClaw config; ours is `api.pluginConfig`.
+        const config = getConfig((api.pluginConfig ?? {}));
+        const state = { paused: false };
         if (!config.wallet) {
             api.logger?.warn("[latent-protocol] no wallet configured — ads disabled. " +
-                "Set config `wallet` (or ADS_WALLET) to a Base address to start earning.");
+                "Run `npx latent-protocol init` or set plugins.entries.latent-protocol.config.wallet.");
         }
-        // Per-session cadence shared across the two per-turn surfaces, so one turn
-        // ticks once and a turn never serves two ads (see hooks/turn-ledger.ts).
-        const freq = new SessionFrequency(config.frequency);
-        const ledger = new TurnLedger();
-        registerThinkingHook(api, config, freq, ledger); // primary
-        registerFooterHook(api, config, freq, ledger); // fallback
-        registerSessionHook(api, config); // welcome banner
+        registerReplyFooter(api, config, state);
+        registerAdsCommand(api, config, state);
     },
 });

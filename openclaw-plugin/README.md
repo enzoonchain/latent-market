@@ -1,31 +1,29 @@
 # Latent Protocol — OpenClaw Plugin
 
-Earn USDC from sponsored ads injected into your agent's **thinking state**, across
-every OpenClaw channel (WhatsApp, Telegram, Slack, Discord, …) from a single plugin.
+Earn USDC from one labelled **sponsored footer under the agent's final reply**,
+across every OpenClaw channel (WhatsApp, Telegram, Slack, Discord, …) from a
+single plugin. Ads are for the people reading the reply — never context for the
+model.
 
-## Why OpenClaw
+## Ad Surface
 
-OpenClaw's `before_prompt_build` hook lets us put a sponsor line in front of the
-user *while the agent thinks* — the least intrusive, highest-value ad surface.
-This is the primary reason OpenClaw is our #1 integration target alongside Hermes.
+| Surface | Hook | Notes |
+|---------|------|-------|
+| Response footer | `reply_payload_sending` (`kind === "final"` only) | Appended in the outbound delivery layer, after the agent run — it reaches the channel, not the model's transcript. Plain text on WhatsApp/Signal/SMS/iMessage, markdown elsewhere. |
+| Billing | `message_sent` | The impression is reported only when a delivery for the same conversation succeeds and its text still contains the footer. |
+| `/ads` command | `api.registerCommand` | `settings`, `balance` (→ dashboard), `on`/`off` (owner only). |
 
-## Ad Surfaces
+Frequency is counted **per conversation** (`sessionKey`), so every chat keeps
+its own cadence. Only a locally computed category slug is sent to the ad
+server — never message text.
 
-| # | Surface | Hook | Role |
-|---|---------|------|------|
-| 1 | Thinking state | `before_prompt_build` | **Primary** — `prependContext` while thinking |
-| 2 | Response footer | `message_sending` | Fallback when (1) didn't run this turn |
-| 3 | Session banner | `session_start` | One welcome line per session |
+Deliberately **not** used: `before_prompt_build` (`prependContext` is model
+context; the user never sees it) and `session_start` (observe-only; return
+values are discarded).
 
-Surfaces 1 and 2 share a **per-session** frequency counter
-(`SessionFrequency`) and a **turn ledger** (`src/hooks/turn-ledger.ts`) so a
-single turn never serves two ads and each channel/conversation keeps its own
-cadence (OpenClaw runs many channels through one plugin instance).
-
-**Click attribution:** the CTA points at the server's `/ad/click` redirect,
-which logs the click and 302s to the advertiser — so clicks (worth 50x
-impressions) are attributable in every channel where the link is clickable.
-Only safe `https://` targets are ever rendered as clickable links.
+**Click attribution:** the CTA points at the server's `/ad/click` redirect with
+the signed click token, which logs the click and 302s to the advertiser. Only
+safe `https://` targets are ever rendered as links.
 
 ## Install
 
@@ -33,7 +31,7 @@ Only safe `https://` targets are ever rendered as clickable links.
 # From ClawHub (once published)
 openclaw plugins install clawhub:latent-protocol
 openclaw plugins enable latent-protocol
-openclaw config set plugins.latent-protocol.config.wallet "0xYOUR_WALLET"
+openclaw config set plugins.entries.latent-protocol.config.wallet "0xYOUR_WALLET"
 openclaw gateway restart
 
 # Local dev
@@ -46,9 +44,9 @@ openclaw plugins install ./openclaw-plugin --link
 |-----|----------|---------|-------------|
 | `wallet` | ✅ | — | Base (EVM) address that receives USDC |
 | `enabled` | | `true` | Master on/off switch |
-| `frequency` | | `1` | Show an ad once every N turns |
+| `frequency` | | `1` | Footer once every N final replies, per conversation |
 | `server` | | `https://api.latentprotocol.xyz` | Ad server URL |
-| `minPayout` | | `5.0` | Minimum USDC before payout |
+| `minPayout` | | `5.0` | Deprecated, ignored (payouts are on the dashboard) |
 
 Env fallbacks (`ADS_WALLET`, `ADS_ENABLED`, `ADS_FREQUENCY`, `ADS_SERVER`,
 `ADS_MIN_PAYOUT`) are honoured for local dev / CI.

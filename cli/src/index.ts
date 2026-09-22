@@ -74,7 +74,7 @@ Surfaces auto-installed when detected:
   • Claude Code — statusLine + turn hooks (staged to ~/.latent-protocol/bin, run via node)
                   + spinnerVerbs thinking-shimmer line on CC >= 2.1.143
   • Grok Build — status line in ~/.grok/config.toml (same staged statusline.mjs)
-  • OpenClaw — thinking + footer plugin
+  • OpenClaw — sponsored footer on the final reply (all channels)
   • Codex — turn hooks in hooks.json (staged bundle, run via node)
   • MiMo Code — native plugin (~/.config/mimocode/plugins), response footer
   • Cursor / VS Code — extension auto-installed via the code/cursor CLI when detected

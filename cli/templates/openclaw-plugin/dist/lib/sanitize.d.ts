@@ -1,6 +1,6 @@
 /**
- * Ad copy is advertiser-controlled and lands in a chat message (thinking-state
- * line, session banner, response footer) across whatever channel OpenClaw is
+ * Ad copy is advertiser-controlled and lands in a chat message (the response
+ * footer) across whatever channel OpenClaw is
  * bridging (Discord, Telegram, Slack, a terminal, …). None of those are safe
  * sinks for raw bytes:
  *
