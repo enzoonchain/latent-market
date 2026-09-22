@@ -12,20 +12,20 @@ describe("checkBundleConflict", () => {
     expect(r.hasConflict).toBe(false);
   });
 
-  it("detects Kickbacks patch", () => {
-    const r = checkBundleConflict("/* VIBE-ADS-START */ var x = 1; /* VIBE-ADS-END */");
+  it("detects another tool's injected block, without naming it", () => {
+    const r = checkBundleConflict("/* OTHER-ADS-START */ var x = 1; /* OTHER-ADS-END */");
     expect(r.hasConflict).toBe(true);
-    expect(r.conflictingExtension).toBe("kickbacks");
+    expect(r.message).toMatch(/Another tool/);
   });
 
-  it("detects Kickbacks by marker", () => {
-    const r = checkBundleConflict("KICKBACKS_MARKER something");
+  it("flags a foreign block even next to Latent's own", () => {
+    const r = checkBundleConflict("/* LATENT-START */ a /* LATENT-END */ /* FOO-START */ b /* FOO-END */");
     expect(r.hasConflict).toBe(true);
   });
 
-  it("detects CodeBacks patch", () => {
-    const r = checkBundleConflict("CODEBACKS something");
-    expect(r.hasConflict).toBe(true);
+  it("ignores lowercase or unrelated comments", () => {
+    expect(checkBundleConflict("/* build-start */ var x;").hasConflict).toBe(false);
+    expect(checkBundleConflict("// START here").hasConflict).toBe(false);
   });
 });
 

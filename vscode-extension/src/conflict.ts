@@ -1,125 +1,82 @@
 /**
- * Hook conflict detection — warn when another extension owns the same hooks.
+ * Hook conflict detection — warn when another tool owns the same hooks.
  *
- * Both Latent and Kickbacks patch the same targets:
+ * Latent patches two shared targets that other tools may also claim:
  *  - `~/.claude/settings.json` → statusLine (claude-cli)
  *  - Claude Code / Codex webview bundles (bundle patcher)
  *
- * If both are active, they overwrite each other. This module detects the
- * conflict BEFORE patching and tells the user clearly.
+ * If two tools are active on one target, they overwrite each other. This
+ * module detects that BEFORE patching and tells the user clearly. Detection is
+ * generic — any statusLine that isn't Latent's, any marker-delimited block in
+ * a bundle that isn't ours — so it needs no list of other products.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { findAgentBundles } from "./patcher.js";
 
 export interface ConflictCheck {
   hasConflict: boolean;
-  conflictingExtension?: string;
   target: string;
   message: string;
 }
 
-/** Known extension IDs that hook the same surfaces. */
-const COMPETITORS = [
-  "kickbacksai.kickbacks-ai",
-  "codebacks.codebacks",
-];
-
-/** Check if a competitor extension is installed. */
-export function findCompetitorExtensions(cursorExtensionsDir?: string): string[] {
-  const found: string[] = [];
-  const dirs = [
-    cursorExtensionsDir || join(homedir(), ".cursor", "extensions"),
-    join(homedir(), ".vscode", "extensions"),
-  ];
-  for (const dir of dirs) {
-    try {
-      const entries = readdirSync(dir);
-      for (const entry of entries) {
-        for (const comp of COMPETITORS) {
-          if (entry.startsWith(comp)) {
-            found.push(entry);
-          }
-        }
-      }
-    } catch {
-      // dir doesn't exist — fine
-    }
-  }
-  return found;
-}
-
-/** Check `~/.claude/settings.json` statusLine for foreign hooks. */
+/** Check `~/.claude/settings.json` statusLine for a foreign hook. */
 export function checkClaudeCliConflict(): ConflictCheck {
   const settingsPath = join(homedir(), ".claude", "settings.json");
   try {
     const raw = readFileSync(settingsPath, "utf8");
     const settings = JSON.parse(raw);
-    const statusLine = settings?.statusLine?.command || "";
+    const statusLine: string = settings?.statusLine?.command || "";
 
-    if (statusLine.includes("latent")) {
+    if (!statusLine) {
+      return { hasConflict: false, target: "claude-cli", message: "No statusLine hook set." };
+    }
+    if (/latent/i.test(statusLine)) {
       return { hasConflict: false, target: "claude-cli", message: "Latent owns the statusLine hook." };
     }
-    if (statusLine.includes("kickbacks")) {
-      return {
-        hasConflict: true,
-        conflictingExtension: "kickbacks",
-        target: "claude-cli",
-        message: "Kickbacks owns the Claude CLI statusLine hook. Enable Latent to take over? (Backup will be created.)",
-      };
-    }
-    if (statusLine.includes("codebacks")) {
-      return {
-        hasConflict: true,
-        conflictingExtension: "codebacks",
-        target: "claude-cli",
-        message: "CodeBacks owns the Claude CLI statusLine hook. Enable Latent to take over? (Backup will be created.)",
-      };
-    }
-    return { hasConflict: false, target: "claude-cli", message: "No foreign statusLine hook detected." };
+    const shown = statusLine.length > 60 ? `${statusLine.slice(0, 57)}…` : statusLine;
+    return {
+      hasConflict: true,
+      target: "claude-cli",
+      message: `Another tool owns the Claude CLI statusLine (${shown}). Let Latent take over? It is restored when you remove the Latent hook.`,
+    };
   } catch {
     return { hasConflict: false, target: "claude-cli", message: "No Claude CLI settings found." };
   }
 }
 
-/** Check if a bundle is already patched by a competitor. */
+/** A `/* NAME-START *\/` block injected into a bundle by some patcher. */
+const INJECTED_BLOCK = /\/\*\s*([A-Z][A-Z0-9_-]*)-START\s*\*\//g;
+
+/** Check if a bundle already carries another tool's injected block. */
 export function checkBundleConflict(bundleContent: string): ConflictCheck {
+  const foreign = [...bundleContent.matchAll(INJECTED_BLOCK)]
+    .map((m) => m[1])
+    .filter((name) => !name.startsWith("LATENT"));
+  if (foreign.length > 0) {
+    return {
+      hasConflict: true,
+      target: "bundle",
+      message: "Another tool has patched this agent bundle. Enabling Latent replaces that patch (a backup is kept).",
+    };
+  }
   if (bundleContent.includes("LATENT-START")) {
     return { hasConflict: false, target: "bundle", message: "Latent patch is active." };
-  }
-  if (bundleContent.includes("VIBE-ADS-START") || bundleContent.includes("KICKBACKS")) {
-    return {
-      hasConflict: true,
-      conflictingExtension: "kickbacks",
-      target: "bundle",
-      message: "Kickbacks has patched this agent bundle. Enabling Latent will replace the Kickbacks patch (a backup will be kept).",
-    };
-  }
-  if (bundleContent.includes("CODEBACKS")) {
-    return {
-      hasConflict: true,
-      conflictingExtension: "codebacks",
-      target: "bundle",
-      message: "CodeBacks has patched this agent bundle. Enabling Latent will replace it (a backup will be kept).",
-    };
   }
   return { hasConflict: false, target: "bundle", message: "Clean bundle." };
 }
 
 /** Run all conflict checks and return a summary. */
 export function runAllChecks(): ConflictCheck[] {
-  const results: ConflictCheck[] = [];
-  results.push(checkClaudeCliConflict());
-
-  const competitors = findCompetitorExtensions();
-  if (competitors.length > 0) {
-    results.push({
-      hasConflict: true,
-      conflictingExtension: competitors[0],
-      target: "installed-extensions",
-      message: `Competitor extension(s) found: ${competitors.join(", ")}. They may fight over the same hooks.`,
-    });
+  const results: ConflictCheck[] = [checkClaudeCliConflict()];
+  for (const b of findAgentBundles()) {
+    try {
+      const r = checkBundleConflict(readFileSync(b.bundlePath, "utf8"));
+      if (r.hasConflict) results.push({ ...r, message: `${b.agent}: ${r.message}` });
+    } catch {
+      // unreadable bundle — nothing to report
+    }
   }
-
   return results;
 }

@@ -12,7 +12,7 @@
  *    we wrote and the statusLine it replaced. Removal puts that previous value
  *    back — never a whole-file backup copy, which would silently discard every
  *    settings change the user made in between.
- *  - A foreign statusLine (Kickbacks, CodeBacks, the user's own) is replaced
+ *  - A foreign statusLine (another tool's, or the user's own) is replaced
  *    only when the caller passes `force` after asking the user.
  *
  * The command is `node "<~/.latent-protocol/bin/statusline.mjs>"` — the

@@ -92,7 +92,7 @@ describe("extension-installed statusLine", () => {
   });
 
   it("a foreign statusLine needs force, and comes back on removal", () => {
-    const foreign = { type: "command", command: "npx kickbacks statusline" };
+    const foreign = { type: "command", command: "npx other-tool statusline" };
     write(JSON.stringify({ statusLine: foreign }));
     stageRuntime();
     expect(installClaudeCliHook()).toBe("conflict");

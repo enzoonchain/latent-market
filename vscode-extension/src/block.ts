@@ -17,8 +17,8 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
   // 127.0.0.1 loopback (allowed via the CSP relaxation the patcher applies).
   // The click is a REAL anchor to the loopback /click 302 chain (the server
   // credits and redirects on to the advertiser) — the fetch twin is best-effort
-  // only, since some webviews block connect-src even when relaxed (the
-  // Kickbacks Claude Code lesson: never trust beacon delivery, make the href).
+  // only, since some webviews block connect-src even when relaxed — never
+  // trust beacon delivery from a webview, make the href).
   return `${MARK_START}
 (function(){
   try {

@@ -1,7 +1,7 @@
 /**
  * Viewability funnel — fraud-resistant impression billing.
  *
- * Mirrors the Kickbacks pipeline (verified from their v3.1.7 VSIX):
+ * Funnel:
  *   impression_rendered → view_tick (2.5s cadence) → view_threshold_met (10s) → credit
  *
  * All events go through the loopback (never directly to the ad server).
