@@ -10,6 +10,7 @@ import {
 } from "./surfaces/codex.js";
 import { grokDetected, grokHome } from "./surfaces/grok.js";
 import { mimoConfigDir, mimoDetected } from "./surfaces/mimo.js";
+import { detectVscode } from "./scanners/vscode.js";
 
 export interface DetectedAgents {
   claudeCode: boolean;
@@ -23,6 +24,9 @@ export interface DetectedAgents {
   openclaw: boolean;
   openclawBin: boolean;
   mimo: boolean;
+  vscode: boolean;
+  vscodeBin: boolean;
+  vscodeEditor: "vscode" | "cursor" | null;
   paths: {
     claudeSettings: string;
     grokHome: string;
@@ -32,6 +36,7 @@ export interface DetectedAgents {
     openclawHome: string;
     openclawPlugins: string;
     mimoConfigDir: string;
+    vscodeExtensionsDir: string;
     latentConfig: string;
   };
 }
@@ -346,6 +351,7 @@ export function detectAgents(): DetectedAgents {
   const openclawBin = Boolean(which("openclaw"));
   const grokDir = grokHome(home);
   const grokBin = Boolean(which("grok"));
+  const vs = detectVscode();
 
   return {
     claudeCode: existsSync(claudeDir),
@@ -359,6 +365,9 @@ export function detectAgents(): DetectedAgents {
     openclaw: existsSync(openclawHome) || openclawBin,
     openclawBin,
     mimo: mimoDetected(),
+    vscode: vs.editor !== null,
+    vscodeBin: Boolean(vs.bin),
+    vscodeEditor: vs.editor,
     paths: {
       claudeSettings: join(claudeDir, "settings.json"),
       grokHome: grokDir,
@@ -368,6 +377,7 @@ export function detectAgents(): DetectedAgents {
       openclawHome,
       openclawPlugins: join(openclawHome, "extensions"),
       mimoConfigDir: mimoConfigDir(),
+      vscodeExtensionsDir: vs.extensionsDir ?? join(home, ".vscode", "extensions"),
       latentConfig: join(home, ".latent-protocol", "config.json"),
     },
   };
@@ -407,6 +417,13 @@ export function formatDetectionTable(d: DetectedAgents): string {
     ],
     ...codexFamilyDetectionRows(),
     ["MiMo Code", d.mimo ? "detected" : "not found", d.paths.mimoConfigDir],
+    [
+      "Cursor / VS Code",
+      d.vscode
+        ? `detected (${d.vscodeEditor ?? "?"})${d.vscodeBin ? "+bin" : ""}`
+        : "not found",
+      d.paths.vscodeExtensionsDir,
+    ],
   ];
   return rows
     .map(
@@ -435,7 +452,7 @@ export function formatSurfaceMatrix(d: DetectedAgents): string {
       (a) => `  • ${a.name.padEnd(11)} (turn hooks hooks.json):          installed on init`,
     ),
     `  • MiMo Code (native plugin):                  ${d.mimo ? "installed on init" : "skipped"}`,
-    "  • Cursor / VS Code:                           extension (vscode-extension/)",
+    `  • Cursor / VS Code:                           ${d.vscode ? `extension (${d.vscodeEditor ?? "vscode"})` : "skipped"}`,
     "  • Standalone Telegram bots:                   manual wrap (see docs/PLUGIN.md)",
   ];
   return lines.join("\n");

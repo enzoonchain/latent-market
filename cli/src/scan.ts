@@ -5,6 +5,7 @@ import { scanHermes } from "./scanners/hermes.js";
 import { scanCodexFamily } from "./scanners/codex.js";
 import { scanOpenclaw } from "./scanners/openclaw.js";
 import { scanClaudeCode } from "./scanners/claude-code.js";
+import { scanVscode } from "./scanners/vscode.js";
 import {
   DEFAULT_SCAN_DAYS,
   SCAN_VERSION,
@@ -22,6 +23,7 @@ export function scanPrelaunchAgents(days = DEFAULT_SCAN_DAYS): AgentScanResult[]
   }
   agents.push(...scanCodexFamily(days));
   agents.push(scanOpenclaw(days));
+  agents.push(scanVscode(days));
 
   return agents;
 }

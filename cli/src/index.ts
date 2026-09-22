@@ -37,6 +37,11 @@ import {
   uninstallCodexFamily,
 } from "./surfaces/codex.js";
 import { installMimo, mimoStatus, uninstallMimo } from "./surfaces/mimo.js";
+import {
+  installVscode,
+  uninstallVscode,
+  vscodeStatus,
+} from "./surfaces/vscode.js";
 import { runHook, type HookAgent, type HookEvent } from "./hook.js";
 import { runPrelaunch, runActivate } from "./prelaunch.js";
 import { DEFAULT_SCAN_DAYS } from "./scanners/types.js";
@@ -59,7 +64,7 @@ Commands:
   prelaunch    Pre-launch signup: wallet + local scan + register (ads OFF)
   activate     Enable ads and patch surfaces (after public launch)
   status       Show config, balance, and patched surfaces
-  uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + Codex + MiMo patches
+  uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + Codex + MiMo + VS Code patches
   statusline   Claude Code / Grok status-line renderer (stdin → stdout)
   hook         Turn-lifecycle hook runtime (invoked by installed hooks)
 
@@ -72,7 +77,7 @@ Surfaces auto-installed when detected:
   • OpenClaw — thinking + footer plugin
   • Codex — turn hooks in hooks.json (staged bundle, run via node)
   • MiMo Code — native plugin (~/.config/mimocode/plugins), response footer
-  • Cursor / VS Code — extension (see vscode-extension/)
+  • Cursor / VS Code — extension auto-installed via the code/cursor CLI when detected
 `);
 }
 
@@ -187,6 +192,10 @@ async function cmdInit(args: string[]): Promise<void> {
     console.log(installMimo());
     console.log();
   }
+  if (detected.vscode) {
+    console.log(await installVscode());
+    console.log();
+  }
 
   // Re-detect after install for accurate matrix
   const after = detectAgents();
@@ -231,6 +240,7 @@ async function cmdStatus(): Promise<void> {
   console.log(`  ${openclawStatus()}`);
   for (const line of codexFamilyStatus()) console.log(`  ${line}`);
   console.log(`  ${mimoStatus()}`);
+  console.log(`  ${vscodeStatus()}`);
   console.log();
   console.log("Detected:");
   console.log(formatDetectionTable(detected));
@@ -245,6 +255,7 @@ async function cmdUninstall(): Promise<void> {
   console.log(uninstallOpenclaw());
   console.log(uninstallCodexFamily());
   console.log(uninstallMimo());
+  console.log(await uninstallVscode());
   resetHealth();
 }
 
