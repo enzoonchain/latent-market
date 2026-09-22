@@ -7,7 +7,7 @@ import { strict as assert } from "node:assert";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureWallet, isValidAddress } from "../dist/wallet.js";
+import { ensureWallet, isValidAddress, openInBrowser } from "../dist/wallet.js";
 import { loadConfig } from "../dist/config.js";
 
 const ADDR = "0x7331003C29a8Db67E141dD39964B205598b60bcf";
@@ -181,5 +181,84 @@ test("a leftover generate option no longer mints a local key", async () => {
       /No wallet on file/,
     );
     assert.ok(!logs.some((l) => /Private key/i.test(l)));
+  });
+});
+
+function fakeSpawn(calls) {
+  return (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    return { on() {}, unref() {} };
+  };
+}
+
+test("openInBrowser uses the platform opener, detached", () => {
+  const url = "https://www.latentprotocol.xyz/authorize?user_code=AB-CD&x=1";
+  const calls = [];
+  assert.equal(openInBrowser(url, {}, "darwin", fakeSpawn(calls)), true);
+  assert.equal(openInBrowser(url, { DISPLAY: ":0" }, "linux", fakeSpawn(calls)), true);
+  assert.equal(openInBrowser(url, {}, "win32", fakeSpawn(calls)), true);
+  assert.deepEqual(calls.map((c) => c.cmd), ["open", "xdg-open", "cmd"]);
+  assert.deepEqual(calls[0].args, [url]);
+  assert.deepEqual(calls[2].args, ["/c", "start", "", url.replace(/&/g, "^&")]);
+  assert.ok(calls.every((c) => c.opts.detached && c.opts.stdio === "ignore"));
+});
+
+test("openInBrowser stays quiet where no local browser is watching", () => {
+  const url = "https://www.latentprotocol.xyz/authorize?user_code=AB-CD";
+  const calls = [];
+  for (const env of [{ LATENT_NO_BROWSER: "1" }, { CI: "true" }, { SSH_CONNECTION: "1 2 3 4" }, { SSH_TTY: "/dev/ttys1" }]) {
+    assert.equal(openInBrowser(url, env, "darwin", fakeSpawn(calls)), false);
+  }
+  assert.equal(openInBrowser(url, {}, "linux", fakeSpawn(calls)), false, "no DISPLAY");
+  assert.equal(openInBrowser("file:///etc/passwd", {}, "darwin", fakeSpawn(calls)), false);
+  assert.equal(calls.length, 0);
+});
+
+test("openInBrowser never throws when the opener is missing", () => {
+  const boom = () => {
+    throw new Error("ENOENT");
+  };
+  assert.equal(openInBrowser("https://x.example", {}, "darwin", boom), false);
+});
+
+test("auth link opens the verification URL and reports it", async () => {
+  await withHome(async () => {
+    const opened = [];
+    const logs = [];
+    const fetchImpl = async (url) => {
+      if (url.endsWith("/auth/config")) {
+        return { ok: true, status: 200, json: async () => ({ privy_app_id: "app", configured: true }), text: async () => "" };
+      }
+      if (url.endsWith("/device_authorization")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            device_code: "dc",
+            user_code: "AB-CD",
+            verification_uri_complete: "https://www.latentprotocol.xyz/authorize?user_code=AB-CD",
+            expires_in: 60,
+            interval: 1,
+          }),
+          text: async () => "",
+        };
+      }
+      if (url.endsWith("/token")) {
+        return { ok: true, status: 200, json: async () => ({ access_token: "tok" }), text: async () => "" };
+      }
+      return { ok: true, status: 200, json: async () => ({ wallet: ADDR, privy_user_id: "did:privy:u" }), text: async () => "" };
+    };
+    const addr = await ensureWallet({
+      server: "https://api.example",
+      question: async () => "1",
+      fetchImpl,
+      sleep: async () => {},
+      openUrl: (u) => (opened.push(u), true),
+      log: (l) => logs.push(l),
+    });
+    assert.equal(addr, ADDR);
+    assert.deepEqual(opened, ["https://www.latentprotocol.xyz/authorize?user_code=AB-CD"]);
+    assert.ok(logs.some((l) => /Opened it in your browser/.test(l)));
+    assert.ok(logs.some((l) => l.includes("user_code=AB-CD")), "link is still printed");
   });
 });

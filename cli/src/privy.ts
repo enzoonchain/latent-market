@@ -90,7 +90,12 @@ export async function startDeviceAuth(
     // Only Privy's own code means the dashboard toggle. A bare 403 is just as
     // likely a proxy, a network policy or a WAF between here and Privy, and
     // sending that user to flip a setting that is already on wastes their time.
-    if (body.error === "device_auth_not_enabled") {
+    // Privy sends the toggle as a sentence, not a code:
+    //   {"error":"Device authorization is not enabled for this app"}
+    if (
+      body.error === "device_auth_not_enabled" ||
+      /device authorization is not enabled/i.test(String(body.error || ""))
+    ) {
       throw new Error(
         "Privy CLI/agent access is off. Enable it in the Privy Dashboard (Authentication → Advanced) or use --email / --wallet.",
       );
@@ -141,7 +146,11 @@ export async function pollDeviceToken(
     const res = await fetchImpl("https://auth.privy.io/api/oauth/v2/token", {
       method: "POST",
       headers: { "Content-Type": "application/json", "privy-app-id": appId },
-      body: JSON.stringify({ grant_type: "device_code", device_code: deviceCode }),
+      body: JSON.stringify({
+        // RFC 8628 §3.4 — Privy rejects the bare "device_code" with a 400.
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+        device_code: deviceCode,
+      }),
     });
     const body = (await readJson(res)) as {
       access_token?: string;
