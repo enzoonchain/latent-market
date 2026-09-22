@@ -34,7 +34,6 @@ export async function runPrelaunch(opts: PrelaunchOpts = {}): Promise<void> {
 
   const wallet = await ensureWallet({
     yes: opts.yes,
-    generate: opts.generate,
     wallet: opts.wallet,
     email: opts.email,
     server,

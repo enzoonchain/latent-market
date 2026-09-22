@@ -1,6 +1,5 @@
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { loadConfig, resolveServer, saveConfig } from "./config.js";
 import {
   fetchAuthConfig,
@@ -17,16 +16,8 @@ export function isValidAddress(address: string): boolean {
   return EVM_RE.test(address);
 }
 
-export function generateWallet(): { address: string; privateKey: string } {
-  const privateKey = generatePrivateKey();
-  const account = privateKeyToAccount(privateKey);
-  return { address: account.address, privateKey };
-}
-
 export interface WalletOpts {
   yes?: boolean;
-  /** @deprecated raw keygen — cash-out requires importing the printed key. */
-  generate?: boolean;
   wallet?: string;
   email?: string;
   server?: string;
@@ -149,16 +140,6 @@ async function bindWallet(
 
   if (opts.email) {
     return viaEmail(opts, opts.email, log);
-  }
-
-  if (opts.generate) {
-    const { address, privateKey } = generateWallet();
-    log("\n⚠️  --generate is a last-resort key you must import to cash out.");
-    log("   Prefer `init` (auth link) or `--email` / `--wallet`.");
-    log(`   Address:     ${address}`);
-    log(`   Private key: ${privateKey}`);
-    log("   Latent only stores the address.");
-    return persist(address, { auth: "generated" });
   }
 
   if (existing && opts.yes) {

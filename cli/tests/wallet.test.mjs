@@ -173,12 +173,13 @@ test("interactive [3] saves a pasted address", async () => {
   });
 });
 
-test("--generate still works but is marked last-resort", async () => {
+test("a leftover generate option no longer mints a local key", async () => {
   await withHome(async () => {
     const logs = [];
-    const addr = await ensureWallet({ generate: true, log: (l) => logs.push(l) });
-    assert.match(addr, /^0x[0-9a-fA-F]{40}$/);
-    assert.ok(logs.some((l) => /last-resort/i.test(l)));
-    assert.ok(logs.some((l) => /Private key/i.test(l)));
+    await assert.rejects(
+      ensureWallet({ generate: true, yes: true, log: (l) => logs.push(l) }),
+      /No wallet on file/,
+    );
+    assert.ok(!logs.some((l) => /Private key/i.test(l)));
   });
 });

@@ -229,17 +229,20 @@ def _register_command(ctx, config: Config, tracker: Tracker, last_ad: dict) -> N
                 f"- Frequency: every {config.frequency} messages\n"
                 f"- Server: {config.server}"
             )
-        if cmd == "setup generate":
+        if cmd.startswith("setup email "):
             from .. import setup as setup_mod
-            addr, private_key = setup_mod.generate_wallet()
-            setup_mod.save_config_file({"wallet": addr})
-            config.wallet = addr
+            email = cmd.removeprefix("setup email ").strip()
+            try:
+                earner = wallet_api.pregenerate_email(email, config.server)
+            except ValueError as exc:
+                return f"❌ {exc}"
+            setup_mod.save_config_file(
+                {"wallet": earner["wallet"], "privy_user_id": earner["privy_user_id"], "auth": "privy"}
+            )
+            config.wallet = earner["wallet"]
             return (
-                "✅ **New wallet generated!**\n\n"
-                f"- **Address:** `{addr}`\n"
-                f"- **Private key:** `{private_key}`\n\n"
-                "⚠️ **Save your private key now** — it won't be shown again.\n"
-                "Import it into MetaMask or any EVM wallet to access your USDC earnings.\n\n"
+                f"✅ Wallet ready for {email}: `{earner['wallet']}`\n"
+                f"Claim it with an email code at {earner['claim_url']} to cash out.\n\n"
                 "Your agent will now earn USDC from sponsored ads. "
                 "Check earnings with `/ads balance`."
             )
@@ -248,7 +251,7 @@ def _register_command(ctx, config: Config, tracker: Tracker, last_ad: dict) -> N
             addr = cmd.removeprefix("setup use ").strip()
             if not setup_mod.is_valid_address(addr):
                 return "❌ Invalid address. Must be `0x` followed by 40 hex characters."
-            setup_mod.save_config_file({"wallet": addr})
+            setup_mod.save_config_file({"wallet": addr, "auth": "address"})
             config.wallet = addr
             return (
                 f"✅ Wallet set to `{addr}`\n"
@@ -261,7 +264,7 @@ def _register_command(ctx, config: Config, tracker: Tracker, last_ad: dict) -> N
                 "🔧 **Wallet Setup**\n\n"
                 f"Current wallet: {current}\n\n"
                 "**Options:**\n"
-                "- `/ads setup generate` — create a new wallet automatically\n"
+                "- `/ads setup email you@domain` — get a wallet you claim with your email\n"
                 "- `/ads setup use 0x...` — use your existing wallet address\n\n"
                 "You only need to do this once. Earnings are paid in USDC on Base."
             )

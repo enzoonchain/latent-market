@@ -83,14 +83,12 @@ Surfaces auto-installed when detected:
 
 function parseFlags(args: string[]): {
   yes: boolean;
-  generate: boolean;
   wallet?: string;
   email?: string;
   server?: string;
   rest: string[];
 } {
   let yes = false;
-  let generate = false;
   let wallet: string | undefined;
   let email: string | undefined;
   let server: string | undefined;
@@ -98,7 +96,13 @@ function parseFlags(args: string[]): {
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--yes" || a === "-y") yes = true;
-    else if (a === "--generate") generate = true;
+    else if (a === "--generate") {
+      // Removed: a raw local key is not claimable by Privy, and the only copy
+      // of it was the line printed to the terminal.
+      throw new Error(
+        "--generate was removed. Use the auth link (plain `init`), --email you@domain, or --wallet 0x….",
+      );
+    }
     else if (a === "--wallet") {
       wallet = args[++i];
     } else if (a.startsWith("--wallet=")) {
@@ -115,7 +119,7 @@ function parseFlags(args: string[]): {
       rest.push(a);
     }
   }
-  return { yes, generate, wallet, email, server, rest };
+  return { yes, wallet, email, server, rest };
 }
 
 async function cmdInit(args: string[]): Promise<void> {
@@ -140,7 +144,7 @@ async function cmdInit(args: string[]): Promise<void> {
       "No Claude Code / Grok / Hermes / Hermes WebUI / OpenClaw / Codex / MiMo install found.\n" +
         "Install an agent first, or pass --yes to still create a wallet/config.",
     );
-    if (!flags.yes && !flags.generate && !flags.wallet && !flags.email) {
+    if (!flags.yes && !flags.wallet && !flags.email) {
       process.exitCode = 1;
       return;
     }
@@ -154,7 +158,6 @@ async function cmdInit(args: string[]): Promise<void> {
     : resolveServer(loadConfig());
   const wallet = await ensureWallet({
     yes: flags.yes,
-    generate: flags.generate,
     wallet: flags.wallet,
     email: flags.email,
     server,
@@ -313,7 +316,6 @@ async function cmdPrelaunch(args: string[]): Promise<void> {
   const skipRegister = flags.rest.includes("--skip-register");
   await runPrelaunch({
     yes: flags.yes,
-    generate: flags.generate,
     wallet: flags.wallet,
     email: flags.email,
     server: flags.server,

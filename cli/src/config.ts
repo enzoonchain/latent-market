@@ -122,7 +122,7 @@ export interface LatentConfig {
   prelaunch_registered_at?: string;
   /** Privy user id when the wallet was provisioned via auth link / email. */
   privy_user_id?: string;
-  /** How the wallet was bound: privy | address | generated */
+  /** How the wallet was bound: privy | address */
   auth?: string;
 }
 

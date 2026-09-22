@@ -76,7 +76,7 @@ Generates a new wallet or imports your existing address. Config saved to `~/.lat
 
 | Tool | Description |
 |------|-------------|
-| `setup_wallet(mode, address)` | Generate or import your earning wallet |
+| `setup_wallet(mode, email, address)` | Bind an email-claimable Privy wallet or import your address |
 | `request_ad(context, surface)` | Fetch a sponsored recommendation |
 | `check_balance()` | Your current USDC earnings balance |
 | `request_payout()` | Withdraw earned USDC (min $5) |
@@ -133,7 +133,7 @@ not Hermes `ads.wallet` keys. Prefer `latent-setup` or `/ads setup` in chat.
 
 ```
 /ads setup          — configure your wallet
-/ads setup generate — generate a new wallet
+/ads setup email you@domain — get a wallet you claim with your email
 /ads setup use 0x.. — use your existing address
 /ads balance        — check USDC earnings
 /ads payout         — withdraw to your wallet
