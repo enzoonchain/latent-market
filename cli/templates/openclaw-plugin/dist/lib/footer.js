@@ -44,25 +44,24 @@ export function clickUrl(server, ad, wallet) {
     const t = encodeURIComponent(ad.click_token ?? "");
     return `${server}/ad/click?ad=${id}&w=${w}&t=${t}`;
 }
-/**
- * Single-line sponsor string for thinking-state `prependContext`. Advertiser
- * copy (`body`/`title`/`cta_text`) is untrusted, attacker-controllable text —
- * sanitize before it reaches any chat renderer.
- */
-export function thinkingLine(ad, href) {
-    const body = sanitizeAdText(ad.body || ad.title, AD_LIMITS.body) || "Sponsored";
-    const cta = sanitizeAdText(ad.cta_text, AD_LIMITS.cta_text) || "Learn more";
-    // Only surface the URL if it's a safe https target.
-    const tail = isSafeUrl(href) ? ` — ${cta}: ${href}` : ` — ${cta}`;
-    return `💡 Sponsored while you wait: ${body}${tail}`;
+/** Channels whose clients show raw text (no markdown link rendering). */
+const PLAIN_CHANNELS = new Set(["whatsapp", "signal", "sms", "imessage", "bluebubbles", "irc", "line"]);
+/** Footer style for a channel id: markdown unless the channel shows raw text. */
+export function footerStyle(channel) {
+    return PLAIN_CHANNELS.has((channel ?? "").toLowerCase()) ? "plain" : "markdown";
 }
-/** Markdown footer appended to an outgoing message (fallback surface). */
-export function formatFooter(ad, href) {
+/** Labelled sponsored footer appended to the final outgoing reply. */
+export function formatFooter(ad, href, style = "markdown") {
     const body = sanitizeAdText(ad.body || ad.title, AD_LIMITS.body) || "Sponsored";
     const cta = sanitizeAdText(ad.cta_text, AD_LIMITS.cta_text) || "Learn more";
     const earn = ad.earn_amount ?? 0;
+    const safe = isSafeUrl(href);
+    if (style === "plain") {
+        const ctaLine = safe ? `${cta} → ${href}` : `${cta} →`;
+        return `\n\n💰 Sponsored: ${body}\n${ctaLine}\n+$${earn} USDC earned`;
+    }
     // Render a clickable markdown link only for safe https; else plain text.
-    const ctaLine = isSafeUrl(href) ? `[${cta} →](${href})` : `${cta} →`;
+    const ctaLine = safe ? `[${cta} →](${href})` : `${cta} →`;
     return (`\n\n---\n` +
         `💰 **Sponsored:** ${body}  \n` +
         `${ctaLine}  \n` +

@@ -1,27 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { thinkingLine, formatFooter, isSafeUrl } from "../src/lib/footer.js";
+import { footerStyle, formatFooter, isSafeUrl } from "../src/lib/footer.js";
 import type { Ad } from "../src/lib/ad-client.js";
 
 const CTRL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/;
-
-describe("thinkingLine", () => {
-  it("sanitizes ANSI/control-char injection in ad body and CTA text", () => {
-    const ad: Ad = {
-      ad_id: "1",
-      body: "\x1b[2J\x1b[H PWNED",
-      cta_text: "\x1b]0;evil\x07Click",
-    };
-    const line = thinkingLine(ad, "https://acme.example");
-    expect(CTRL.test(line)).toBe(false);
-    expect(line).toContain("PWNED"); // sanitized but not silently dropped
-  });
-
-  it("never emits an http:// or javascript: URL as a clickable target", () => {
-    const ad: Ad = { ad_id: "1", body: "hi" };
-    const line = thinkingLine(ad, "javascript:alert(1)");
-    expect(line).not.toContain("javascript:alert(1)");
-  });
-});
 
 describe("formatFooter", () => {
   it("sanitizes ad copy before it's appended to an outgoing chat message", () => {
@@ -53,12 +34,33 @@ describe("isSafeUrl", () => {
   });
 });
 
-describe("thinkingLine markdown-link injection", () => {
+describe("formatFooter markdown-link injection", () => {
   it("neutralizes [text](url) brackets so ad copy can't inject a second link", () => {
-    const ad: Ad = { ad_id: "1", body: "Buy now [Click here](https://evil.example/phish)" };
-    const line = thinkingLine(ad, "https://acme.example");
-    expect(line).not.toContain("[");
-    expect(line).not.toContain("]");
-    expect(line).toContain("Click here");
+    const ad: Ad = { ad_id: "1", body: "Buy now [Click here](https://evil.example/phish)", cta_text: "Go" };
+    const out = formatFooter(ad, "https://acme.example");
+    expect(out).not.toContain("[Click here]");
+    expect(out).toContain("Click here");
+    expect(out.match(/\]\(/g)?.length).toBe(1); // only our own CTA link
+  });
+
+  it("never links an unsafe URL", () => {
+    const out = formatFooter({ ad_id: "1", body: "hi", cta_text: "Go" }, "javascript:alert(1)");
+    expect(out).not.toContain("javascript:");
+  });
+});
+
+describe("footerStyle / plain footer", () => {
+  it("uses plain text on channels that show raw markdown", () => {
+    expect(footerStyle("whatsapp")).toBe("plain");
+    expect(footerStyle("WhatsApp")).toBe("plain");
+    expect(footerStyle("telegram")).toBe("markdown");
+    expect(footerStyle(undefined)).toBe("markdown");
+  });
+
+  it("plain footer has no markdown syntax and keeps the label", () => {
+    const out = formatFooter({ ad_id: "1", body: "Swap fast", cta_text: "Trade", earn_amount: 0.005 }, "https://acme.example", "plain");
+    expect(out).toContain("💰 Sponsored: Swap fast");
+    expect(out).toContain("Trade → https://acme.example");
+    expect(out).not.toMatch(/\*\*|\]\(|^---$/m);
   });
 });

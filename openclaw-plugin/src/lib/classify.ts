@@ -1,12 +1,10 @@
 /**
  * Local message categorizer.
  *
- * Mirrors the CodeBacks / cli `classify.ts` privacy model: categorization runs
- * entirely on the machine hosting the plugin, over the user's message text,
- * and ONLY the resulting category slug ever leaves the machine (as the
- * ad-request targeting tag). The raw message must never be forwarded as-is —
- * `thinking-inject.ts` and `message-footer.ts` used to send `event.userMessage`
- * / `event.content` verbatim as `context`; this is what replaces that.
+ * Mirrors the cli `classify.ts` privacy model: categorization runs entirely on
+ * the machine hosting the plugin, over the reply text, and ONLY the resulting
+ * category slug ever leaves the machine (as the ad-request targeting tag). The
+ * raw text must never be forwarded as `context`.
  *
  * Kept as a separate copy of `cli/src/classify.ts` (no manifest-file scan,
  * since a gateway plugin has no single project `cwd`) — this package has no
@@ -62,7 +60,7 @@ const KEYWORDS: Record<Exclude<Category, "general">, string[]> = {
 };
 
 // Compiled once at module load (~130 keywords) rather than per classifyMessage
-// call — this runs on every turn from thinking-inject.ts/message-footer.ts.
+// call — this runs on every final reply from hooks/reply-footer.ts.
 const WORD_PATTERNS: Record<Exclude<Category, "general">, RegExp[]> = Object.fromEntries(
   Object.entries(KEYWORDS).map(([cat, words]) => [
     cat,

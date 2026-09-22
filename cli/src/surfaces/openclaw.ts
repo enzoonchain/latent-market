@@ -104,8 +104,9 @@ function setOpenclawConfig(wallet: string, server: string, frequency: number): s
     return "ℹ️  openclaw CLI not on PATH — wrote extension files only; enable manually.";
   }
 
+  // Plugin settings live at `plugins.entries.<id>.config` (docs/plugins/manifest.md).
+  // `plugins.<id>` is not a config key — writing it makes strict validation fail.
   const attempts = [
-    ["config", "set", `plugins.${PLUGIN_ID}.config.wallet`, wallet],
     ["config", "set", `plugins.entries.${PLUGIN_ID}.config.wallet`, wallet],
     ["plugins", "config", "set", PLUGIN_ID, "wallet", wallet],
   ];
@@ -121,14 +122,14 @@ function setOpenclawConfig(wallet: string, server: string, frequency: number): s
   }
   if (!walletSet) {
     lines.push(
-      "⚠️  Could not set wallet via openclaw CLI — set plugins.latent-protocol.config.wallet manually.",
+      `⚠️  Could not set wallet via openclaw CLI — set plugins.entries.${PLUGIN_ID}.config.wallet manually.`,
     );
   }
 
   // Best-effort server / frequency
   for (const [key, val] of [
-    [`plugins.${PLUGIN_ID}.config.server`, server],
-    [`plugins.${PLUGIN_ID}.config.frequency`, String(frequency)],
+    [`plugins.entries.${PLUGIN_ID}.config.server`, server],
+    [`plugins.entries.${PLUGIN_ID}.config.frequency`, String(frequency)],
   ] as const) {
     run("openclaw", ["config", "set", key, val]);
   }

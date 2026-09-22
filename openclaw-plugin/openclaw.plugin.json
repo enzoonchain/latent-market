@@ -1,6 +1,5 @@
 {
   "id": "latent-protocol",
-  "kind": "skill",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -17,7 +16,7 @@
       },
       "frequency": {
         "type": "number",
-        "description": "Show a sponsored ad once every N turns.",
+        "description": "Show the sponsored footer once every N final replies, per conversation.",
         "default": 1,
         "minimum": 1
       },
@@ -28,10 +27,12 @@
       },
       "minPayout": {
         "type": "number",
-        "description": "Minimum USDC balance before a payout can be requested.",
+        "description": "Deprecated and ignored \u2014 balance and payouts are on the Latent dashboard. Kept so existing configs still validate.",
         "default": 5.0
       }
     },
-    "required": ["wallet"]
+    "required": [
+      "wallet"
+    ]
   }
 }

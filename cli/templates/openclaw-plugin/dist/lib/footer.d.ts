@@ -17,14 +17,10 @@ export declare function isSafeUrl(url: string): boolean;
  * for a wallet that never clicked anything).
  */
 export declare function clickUrl(server: string, ad: Ad, wallet: string): string;
-/**
- * Single-line sponsor string for thinking-state `prependContext`. Advertiser
- * copy (`body`/`title`/`cta_text`) is untrusted, attacker-controllable text —
- * sanitize before it reaches any chat renderer.
- */
-export declare function thinkingLine(ad: Ad, href: string): string;
-/** Markdown footer appended to an outgoing message (fallback surface). */
-export declare function formatFooter(ad: Ad, href: string): string;
+/** Footer style for a channel id: markdown unless the channel shows raw text. */
+export declare function footerStyle(channel?: string): "markdown" | "plain";
+/** Labelled sponsored footer appended to the final outgoing reply. */
+export declare function formatFooter(ad: Ad, href: string, style?: "markdown" | "plain"): string;
 /**
  * Per-session frequency throttle: show an ad once every `every` turns, tracked
  * independently per session id. OpenClaw runs many channels/sessions through
