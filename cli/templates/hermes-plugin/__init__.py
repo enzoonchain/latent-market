@@ -13,6 +13,11 @@ footer under the finished reply. Hermes applies it before the reply is stored
 and delivered, so what is billed is what the user sees. ``pre_llm_call`` is
 deliberately NOT used: its return value is appended to the user's message and
 reaches only the model, never the user.
+
+The stored reply keeps the footer (the user scrolls back and still sees it),
+so an ``llm_request`` middleware strips our footers from the assistant turns
+of every outgoing request: the ad is for the reader, never context for the
+model — otherwise it starts commenting on "that Sponsored block".
 """
 
 from __future__ import annotations
@@ -70,6 +75,55 @@ def is_safe_https_url(url) -> bool:
     if _CONTROL.search(url) or _BIDI.search(url):
         return False
     return "@" not in urlsplit(url).netloc
+
+
+# Every footer style starts with this shape and is always the tail of a reply.
+_FOOTER_TAIL = re.compile(r"\n\n(?:---\n)?💰 (?:\*\*|\*)?Sponsored:[\s\S]*\Z")
+
+
+def strip_footer(text):
+    """Remove a trailing sponsored footer from one assistant text."""
+    if not isinstance(text, str) or "Sponsored:" not in text:
+        return text
+    return _FOOTER_TAIL.sub("", text)
+
+
+def _strip_content(content):
+    """(new_content, changed) for a message's ``content`` — str or block list."""
+    if isinstance(content, str):
+        new = strip_footer(content)
+        return new, new != content
+    if isinstance(content, list):
+        changed, out = False, []
+        for block in content:
+            if isinstance(block, dict) and isinstance(block.get("text"), str):
+                new = strip_footer(block["text"])
+                if new != block["text"]:
+                    block, changed = {**block, "text": new}, True
+            out.append(block)
+        return out, changed
+    return content, False
+
+
+def strip_footers_from_request(request):
+    """Copy of an LLM request with our footers removed from assistant turns
+    (chat ``messages`` and responses-API ``input``), or None if unchanged."""
+    if not isinstance(request, dict):
+        return None
+    changed_any, new_req = False, dict(request)
+    for key in ("messages", "input"):
+        items = request.get(key)
+        if not isinstance(items, list):
+            continue
+        out = []
+        for item in items:
+            if isinstance(item, dict) and item.get("role") == "assistant" and "content" in item:
+                content, changed = _strip_content(item["content"])
+                if changed:
+                    item, changed_any = {**item, "content": content}, True
+            out.append(item)
+        new_req[key] = out
+    return new_req if changed_any else None
 
 
 def _style_for_platform(platform) -> str:
@@ -253,7 +307,16 @@ def register(ctx) -> None:
         report_impression(ad, cfg)
         return response_text + footer
 
+    def strip_history(request=None, **_kwargs):
+        cleaned = strip_footers_from_request(request)
+        if cleaned is None:
+            return None
+        return {"request": cleaned, "source": "agent-ads", "reason": "strip sponsored footers from history"}
+
     ctx.register_hook("transform_llm_output", transform_llm_output)
+    register_middleware = getattr(ctx, "register_middleware", None)
+    if callable(register_middleware):  # Hermes builds without middleware keep the footer in history
+        register_middleware("llm_request", strip_history)
     ctx.register_command(
         "ads",
         lambda args: handle_ads_command(args, state),

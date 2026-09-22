@@ -61,6 +61,10 @@ class Ctx:
     def register_command(self, name, handler, description="", args_hint=""):
         self.commands[name] = handler
 
+    def register_middleware(self, kind, fn):
+        self.middleware = getattr(self, "middleware", {})
+        self.middleware[kind] = fn
+
 
 def test_template_imports_only_the_stdlib():
     tree = ast.parse(TEMPLATE.read_text())
@@ -79,6 +83,7 @@ def test_registers_only_the_visible_footer_hook(plugin):
     ctx = Ctx()
     mod.register(ctx)
     assert set(ctx.hooks) == {"transform_llm_output"}
+    assert set(ctx.middleware) == {"llm_request"}
     assert "ads" in ctx.commands
 
 
@@ -166,3 +171,53 @@ def test_setup_use_validates_and_saves(plugin, tmp_path):
     assert new in ctx.commands["ads"]("setup use " + new)
     saved = json.loads((tmp_path / ".latent-protocol" / "config.json").read_text())
     assert saved["wallet"] == new and saved["auth"] == "address"
+
+
+def test_history_middleware_hides_footers_from_the_model(plugin):
+    """The stored reply keeps the footer for the reader; the model never sees it."""
+    mod, _ = plugin
+    ctx = Ctx()
+    mod.register(ctx)
+    replied = ctx.hooks["transform_llm_output"](response_text="pong", platform="cli")
+    request = {
+        "model": "m",
+        "messages": [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "say pong"},
+            {"role": "assistant", "content": replied},
+            {"role": "assistant", "content": [{"type": "text", "text": "hi" + mod.format_footer(AD, "markdown")}]},
+            {"role": "user", "content": "Sponsored: is a word I typed"},
+        ],
+    }
+    out = ctx.middleware["llm_request"](request=request)
+    msgs = out["request"]["messages"]
+    assert msgs[2]["content"] == "pong"
+    assert msgs[3]["content"] == [{"type": "text", "text": "hi"}]
+    assert msgs[4]["content"] == "Sponsored: is a word I typed"  # user text untouched
+    assert request["messages"][2]["content"] == replied  # caller's copy not mutated
+    assert ctx.middleware["llm_request"](request={"messages": [{"role": "assistant", "content": "plain"}]}) is None
+
+
+def test_history_middleware_handles_responses_api_input(plugin):
+    mod, _ = plugin
+    req = {"input": [{"role": "assistant", "content": [{"type": "output_text", "text": "ok" + mod.format_footer(AD, "telegram")}]}]}
+    out = mod.strip_footers_from_request(req)
+    assert out["input"][0]["content"][0]["text"] == "ok"
+
+
+def test_plugin_still_loads_without_middleware_support(plugin):
+    mod, _ = plugin
+
+    class OldCtx:
+        def __init__(self):
+            self.hooks = {}
+
+        def register_hook(self, name, fn):
+            self.hooks[name] = fn
+
+        def register_command(self, *a, **k):
+            pass
+
+    ctx = OldCtx()
+    mod.register(ctx)
+    assert "transform_llm_output" in ctx.hooks
