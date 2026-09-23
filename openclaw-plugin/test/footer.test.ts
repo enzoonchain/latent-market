@@ -59,7 +59,9 @@ describe("footerStyle / plain footer", () => {
 
   it("plain footer has no markdown syntax and keeps the label", () => {
     const out = formatFooter({ ad_id: "1", body: "Swap fast", cta_text: "Trade", earn_amount: 0.005 }, "https://acme.example", "plain");
-    expect(out).toContain("💰 Sponsored: Swap fast");
+    expect(out).toContain("Swap fast");
+    expect(out).toMatch(/ · Sponsored: \+\$[^ ]+ USDC$/);
+    expect(out).not.toContain("💰");
     expect(out).toContain("Trade → https://acme.example");
     expect(out).not.toMatch(/\*\*|\]\(|^---$/m);
   });

@@ -106,13 +106,13 @@ test("plugin: sanitises ad copy, gates unsafe URLs, bills one impression", async
     const output = { text: "the response" };
     await hooks["experimental.text.complete"](undefined, output);
 
-    assert.match(output.text, /---\n💰 \*\*Sponsored:\*\*/, "no footer appended");
+    assert.match(output.text, /\n\n> .* · _Sponsored: \+\$[^ ]+ USDC_$/, "no footer appended");
     // ESC sequence stripped, control-free, brackets swapped to fullwidth.
     assert.ok(!output.text.includes("\x1b"), "raw ESC byte leaked into output");
     assert.match(output.text, /Sponsored body with ［brackets］/);
     // Safe https CTA renders as a markdown link.
     assert.match(output.text, /\[Go now →\]\(https:\/\/example\.com\/x\)/);
-    assert.match(output.text, /_\+\$0\.0025 USDC earned_/);
+    assert.match(output.text, /_Sponsored: \+\$0\.0025 USDC_/);
 
     assert.equal(impressions.length, 1, "expected exactly one impression report");
     assert.equal(impressions[0].ad_id, "ad-1");

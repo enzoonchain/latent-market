@@ -97,7 +97,7 @@ export function buildCursorBlock(
   function show() {
     if (!cur) return;
     var container = ensureEl();
-    container.textContent = "\\uD83D\\uDCA1 Sponsored: " + clean(cur.text).slice(0, 60);
+    container.textContent = clean(cur.text).slice(0, 60) + " \\u00b7 Sponsored";
     container.title = /^https:\\/\\//i.test(String(cur.url || "")) ? clean(cur.url) : "Latent Protocol — sponsored";
     container.style.display = "block";
     container.onclick = function() {

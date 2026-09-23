@@ -56,16 +56,14 @@ export function formatFooter(ad, href, style = "markdown") {
     const cta = sanitizeAdText(ad.cta_text, AD_LIMITS.cta_text) || "Learn more";
     const earn = ad.earn_amount ?? 0;
     const safe = isSafeUrl(href);
+    // One quiet line: the ad reads first, the disclosure is a trailing tag.
     if (style === "plain") {
-        const ctaLine = safe ? `${cta} → ${href}` : `${cta} →`;
-        return `\n\n💰 Sponsored: ${body}\n${ctaLine}\n+$${earn} USDC earned`;
+        const link = safe ? `${cta} → ${href}` : `${cta} →`;
+        return `\n\n${body}  ${link} · Sponsored: +$${earn} USDC`;
     }
     // Render a clickable markdown link only for safe https; else plain text.
-    const ctaLine = safe ? `[${cta} →](${href})` : `${cta} →`;
-    return (`\n\n---\n` +
-        `💰 **Sponsored:** ${body}  \n` +
-        `${ctaLine}  \n` +
-        `_+$${earn} USDC earned_`);
+    const link = safe ? `[${cta} →](${href})` : `${cta} →`;
+    return `\n\n> ${body} ${link} · _Sponsored: +$${earn} USDC_`;
 }
 /**
  * Per-session frequency throttle: show an ad once every `every` turns, tracked

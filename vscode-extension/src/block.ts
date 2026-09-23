@@ -1,7 +1,7 @@
 /**
  * The self-contained JS injected into the agent webview bundle. It watches the
- * agent's spinner row and, while the agent is busy, overwrites the spinner text
- * with a labeled sponsor line fetched from the local loopback — rotating on a
+ * agent's spinner row and, while the agent is busy, adds a quiet sponsor line
+ * (and swaps the spinner glyph for the advertiser icon) from the local loopback — rotating on a
  * fixed cadence and billing honestly: exactly one signed impression per ad
  * cycle (sent at the 10s view threshold, or at cycle end with the real dwell
  * time so the server's view-time gate decides the credit), plus a real <a> click
@@ -37,6 +37,38 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     function clean(v){ return String(v == null ? '' : v).replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g,'').slice(0,200); }
     function isHttps(v){ return String(v || '').toLowerCase().indexOf('https://') === 0; }
     function isLoopback(v){ return /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\//.test(String(v || '')); }
+    // The loopback inlines the advertiser icon as a data: URI (the webview's
+    // img-src only allows data:). Anything else is ignored.
+    function isDataImage(v){ return /^data:image\\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+\\/]+=*$/.test(String(v || '')); }
+    // Swap the host's animated spinner glyph for the advertiser icon. In the
+    // Claude Code webview (checked against 2.1.278) the glyph is the first of
+    // two aria-hidden spans in the spinner row. The icon is a background on
+    // that span with its own glyph text made transparent: the host rewrites
+    // the text every ~120ms but never touches these style properties, so
+    // there is nothing to race. Unknown structure or no icon: leave it alone.
+    var GLYPH_STYLE = ['backgroundImage','backgroundSize','backgroundRepeat','backgroundPosition','color','display','width','height','verticalAlign','borderRadius'];
+    var styledGlyph = null;
+    function restoreGlyph(){
+      if(!styledGlyph) return;
+      for(var i = 0; i < GLYPH_STYLE.length; i++) styledGlyph.style[GLYPH_STYLE[i]] = '';
+      styledGlyph.removeAttribute('data-latent-icon');
+      styledGlyph = null;
+    }
+    function paintIcon(s){
+      var spans = s.querySelectorAll('span[aria-hidden="true"]');
+      var g = spans.length >= 2 ? spans[0] : null;
+      var icon = cur && isDataImage(cur.iconUrl) ? cur.iconUrl : '';
+      if(styledGlyph && styledGlyph !== g) restoreGlyph();
+      if(!g || !icon){ restoreGlyph(); return; }
+      if(g.getAttribute('data-latent-icon') === cur.adId) return;
+      var st = g.style;
+      st.backgroundImage = 'url("' + icon + '")';
+      st.backgroundSize = 'contain'; st.backgroundRepeat = 'no-repeat'; st.backgroundPosition = 'center';
+      st.color = 'transparent'; st.display = 'inline-block'; st.width = '1em'; st.height = '1em';
+      st.verticalAlign = 'middle'; st.borderRadius = '3px';
+      g.setAttribute('data-latent-icon', cur.adId);
+      styledGlyph = g;
+    }
     function metric(event, extra){
       try { fetch(CFG.base + '/metric', { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(Object.assign({ event: event, adId: cur ? cur.adId : '' }, extra || {})) }); } catch(e){}
@@ -62,6 +94,7 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     function endCycle(){
       if(!cur) return;
       leave(); bill();
+      restoreGlyph();
       cur = null; cumMs = 0; billed = false; viewableSent = false; tickAt = 0;
     }
     function paint(){
@@ -79,8 +112,9 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       }
       var url = isHttps(cur.url) ? clean(cur.url) : '';
       var href = isLoopback(cur.clickHref) ? clean(cur.clickHref) : '';
-      label.textContent = '  💡 Sponsored: ' + clean(cur.text) + (url ? '  (' + url + ')' : '');
+      label.textContent = '  ' + clean(cur.text) + (url ? '  (' + url + ')' : '') + '  \u00b7 Sponsored';
       if(href){ label.setAttribute('href', href); }
+      paintIcon(s);
     }
     async function show(){
       if(cur) return;

@@ -121,6 +121,32 @@ function clickUrl(ad) {
   return isSafeUrl(ad.cta_url) ? ad.cta_url : ''
 }
 
+// Only the ad server's own /uploads/ images (validated and re-rasterized
+// there). Any other origin would let an advertiser see who viewed the ad.
+function iconUrl(ad) {
+  if (!ad || !isSafeUrl(ad.image_url)) return ''
+  try {
+    var u = new URL(ad.image_url)
+    return u.origin === new URL(SERVER).origin && u.pathname.indexOf('/uploads/') === 0 ? u.href : ''
+  } catch (_) {
+    return ''
+  }
+}
+
+function AdIcon(props) {
+  var src = iconUrl(props.ad)
+  if (!src) return null
+  return jsx('img', {
+    src: src,
+    alt: '',
+    width: props.size,
+    height: props.size,
+    referrerPolicy: 'no-referrer',
+    className: 'shrink-0 rounded-[3px] object-contain',
+    onError: function (e) { e.currentTarget.style.display = 'none' }
+  })
+}
+
 function openExternal(url) {
   if (url && osDoor && osDoor.openExternal) void osDoor.openExternal(url)
 }
@@ -134,15 +160,18 @@ function AdPanel() {
   return jsxs('div', {
     className: 'flex w-60 flex-col gap-2 p-1 text-sm',
     children: [
-      jsx('div', {
-        className: 'text-xs font-medium text-(--ui-text-secondary)',
-        children: '💰 Sponsored'
+      jsxs('div', {
+        className: 'flex items-start gap-2',
+        children: [
+          jsx(AdIcon, { ad: ad, size: 20 }),
+          jsx('div', { children: body || 'No sponsored message right now.' })
+        ]
       }),
-      jsx('div', { children: body || 'No sponsored message right now.' }),
-      ad && typeof ad.earn_amount === 'number'
+      ad
         ? jsx('div', {
             className: 'text-xs text-(--ui-text-tertiary)',
-            children: '+$' + ad.earn_amount + ' USDC earned'
+            children: 'Sponsored' +
+              (typeof ad.earn_amount === 'number' ? ' · +$' + ad.earn_amount + ' USDC earned' : '')
           })
         : null,
       url
@@ -186,7 +215,9 @@ function StatusChip() {
       jsx(PopoverTrigger, {
         className: 'flex max-w-80 items-center gap-1 truncate px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) hover:text-(--ui-text-secondary)',
         onClick: function () { haptic('tap') },
-        children: label ? '💰 Sponsored · ' + label : '💰'
+        children: label
+          ? [jsx(AdIcon, { key: 'i', ad: ad, size: 12 }), jsx('span', { key: 't', className: 'truncate', children: label })]
+          : 'Latent'
       }),
       jsx(PopoverContent, {
         align: 'end',

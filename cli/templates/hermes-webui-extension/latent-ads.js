@@ -6,7 +6,7 @@
 // HERMES_WEBUI_CSP_CONNECT_EXTRA knob in the WebUI's .env.
 //
 // Surface: after each finished turn (the `turn:complete` lifecycle event), one
-// labelled "Sponsored" line is added under the latest assistant reply. It is
+// quiet line (advertiser icon, copy, link, trailing "Sponsored" tag) is added under the latest assistant reply. It is
 // page DOM only: it never enters the transcript, so the model never sees it.
 // Billing honesty: the impression is reported only after the line is in the
 // DOM and the tab is visible. Only a category slug is sent -- never chat text.
@@ -78,6 +78,18 @@
     return isSafeUrl(ad.cta_url) ? ad.cta_url : '';
   }
 
+  // Only the ad server's own /uploads/ images (validated and re-rasterized
+  // there). Any other origin would let an advertiser see who viewed the ad.
+  function iconUrl(ad) {
+    if (!isSafeUrl(ad.image_url)) return '';
+    try {
+      var u = new URL(ad.image_url);
+      return u.origin === new URL(SERVER).origin && u.pathname.indexOf('/uploads/') === 0 ? u.href : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   function latestAssistant() {
     var root = document.getElementById('msgInner') || document.getElementById('messages') || document;
     var rows = root.querySelectorAll('.assistant-turn, .msg-row[data-role="assistant"]');
@@ -91,10 +103,18 @@
     el.setAttribute('role', 'note');
     el.setAttribute('aria-label', 'Sponsored');
 
-    var label = document.createElement('span');
-    label.className = 'latent-ads-label';
-    label.textContent = '\ud83d\udcb0 Sponsored';
-    el.appendChild(label);
+    var icon = iconUrl(ad);
+    if (icon) {
+      var img = document.createElement('img');
+      img.className = 'latent-ads-icon';
+      img.src = icon;
+      img.alt = '';
+      img.width = 16;
+      img.height = 16;
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('error', function () { img.remove(); });
+      el.appendChild(img);
+    }
 
     var body = document.createElement('span');
     body.className = 'latent-ads-body';
@@ -112,12 +132,12 @@
       el.appendChild(a);
     }
 
-    if (typeof ad.earn_amount === 'number') {
-      var earn = document.createElement('span');
-      earn.className = 'latent-ads-earn';
-      earn.textContent = '+$' + ad.earn_amount + ' USDC';
-      el.appendChild(earn);
-    }
+    // Quiet trailing disclosure, after the ad itself.
+    var label = document.createElement('span');
+    label.className = 'latent-ads-label';
+    label.textContent = 'Sponsored' +
+      (typeof ad.earn_amount === 'number' ? ' \u00b7 +$' + ad.earn_amount + ' USDC' : '');
+    el.appendChild(label);
     return el;
   }
 

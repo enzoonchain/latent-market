@@ -168,23 +168,22 @@ _AD_JS = r"""(function () {
 
   function _adHtml(ad, persistent) {
     var earn = ad.earn_amount
-      ? ' · <span style="color:#34d399">+$' + _esc(parseFloat(ad.earn_amount).toFixed(4)) + ' USDC</span>'
+      ? ' · +$' + _esc(parseFloat(ad.earn_amount).toFixed(4)) + ' USDC'
       : '';
     var cta = (ad.cta_url && _isSafeUrl(ad.cta_url))
       ? '<a href="' + _esc(ad.cta_url) + '" target="_blank" rel="noopener noreferrer" '
-        + 'style="color:#60a5fa;text-decoration:none;white-space:nowrap">'
+        + 'style="color:inherit;text-decoration:underline;white-space:nowrap">'
         + _esc(ad.cta_text || 'Learn more') + ' →</a>'
       : '';
-    var label = persistent ? '💰 Sponsored' : 'Sponsored';
-    return '<span style="color:#f59e0b;font-size:10px;letter-spacing:.06em;'
-      + 'text-transform:uppercase;flex-shrink:0">' + label + '</span>'
-      + '<span style="flex:1">' + _esc(ad.body || ad.title || '') + '</span>'
-      + cta + earn;
+    // Quiet trailing tag, not a leading banner label.
+    return '<span style="flex:1">' + _esc(ad.body || ad.title || '') + '</span>'
+      + cta
+      + '<span style="font-size:10px;opacity:.6;flex-shrink:0">Sponsored' + earn + '</span>';
   }
 
   function _styleBox() {
-    return 'margin:6px 0;padding:7px 11px;border:1px solid rgba(251,191,36,.28);'
-      + 'background:rgba(251,191,36,.055);border-radius:5px;font-size:12px;'
+    return 'margin:6px 0;padding:6px 10px;border:1px solid rgba(127,127,127,.25);'
+      + 'border-radius:8px;font-size:12px;'
       + 'display:flex;align-items:center;gap:8px;opacity:.92;line-height:1.4;'
       + 'max-width:var(--msg-max, 720px);margin-left:var(--msg-rail, 0)';
   }
@@ -207,7 +206,7 @@ _AD_JS = r"""(function () {
     if (host.querySelector('.latent-ad-footer')) return true;
     // Skip if plugin/stream already put Sponsored in the message text
     var text = host.textContent || '';
-    if (text.indexOf('Sponsored:') !== -1 || text.indexOf('💰 Sponsored') !== -1) {
+    if (text.indexOf('Sponsored:') !== -1) {
       return true;
     }
     var el = document.createElement('div');

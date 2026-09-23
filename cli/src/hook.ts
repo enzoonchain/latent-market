@@ -42,7 +42,7 @@ const HOOK_OWNS_IMPRESSION: ReadonlySet<HookAgent> = new Set<HookAgent>(["codex"
 export function sponsorLine(ad: Ad): string {
   const body = sanitizeAdText(ad.body || ad.title || "Sponsored", AD_LIMITS.body);
   const cta = ad.cta_url ? ` — ${sanitizeAdText(ad.cta_url, 200)}` : "";
-  return `💡 Sponsored: ${body}${cta}`;
+  return `Sponsored: ${body}${cta}`;
 }
 
 /**

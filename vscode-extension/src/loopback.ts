@@ -18,6 +18,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { deviceId, loadConfig } from "./config.js";
 import { recordServerResult, shouldServe } from "./health.js";
+import { inlineIcon } from "./icon.js";
 
 export interface LoopbackIdentity {
   port: number;
@@ -221,6 +222,7 @@ export class Loopback {
             adId,
             token: (ad.impression_token as string) || "",
             clickHref: adId ? `${this.baseUrl}/click?adId=${encodeURIComponent(adId)}` : "",
+            iconUrl: typeof ad.image_url === "string" ? await inlineIcon(ad.image_url, cfg.server) : "",
           },
         });
       }

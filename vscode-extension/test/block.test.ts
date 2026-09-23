@@ -84,4 +84,24 @@ describe("buildBlock output", () => {
     expect(isLoopback("http://127.0.0.1.evil.com/x")).toBe(false);
     expect(isLoopback("javascript:alert(1)")).toBe(false);
   });
+
+  it("is valid JavaScript once injected", () => {
+    const body = block.slice(block.indexOf(MARK_START) + MARK_START.length, block.indexOf(MARK_END));
+    expect(() => new Function(body)).not.toThrow();
+  });
+
+  it("uses a quiet trailing tag, no emoji", () => {
+    expect(block).toContain("\u00b7 Sponsored");
+    expect(block).not.toMatch(/\u{1F4A1}|\u{1F4B0}/u);
+  });
+
+  it("only swaps the spinner glyph for an inlined raster data: icon", () => {
+    const src = block.match(/function isDataImage\(v\)\{ return (\/.*\/)\.test/)![1];
+    const re = new Function(`return ${src}`)() as RegExp;
+    expect(re.test("data:image/png;base64,iVBORw0KGgo=")).toBe(true);
+    expect(re.test("https://tracker.example/pixel.png")).toBe(false);
+    expect(re.test("data:image/svg+xml;base64,PHN2Zy8+")).toBe(false);
+    expect(re.test('data:image/png;base64,AAAA")/**/;x')).toBe(false);
+    expect(block).toContain("restoreGlyph()");
+  });
 });

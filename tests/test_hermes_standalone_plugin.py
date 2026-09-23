@@ -92,7 +92,9 @@ def test_footer_appended_and_impression_billed(plugin):
     ctx = Ctx()
     mod.register(ctx)
     out = ctx.hooks["transform_llm_output"](response_text="pong", session_id="s", platform="cli")
-    assert out.startswith("pong\n\n💰 Sponsored: Move assets to Base")
+    assert out.startswith("pong\n\nMove assets to Base")
+    assert "💰" not in out and out.endswith(" · Sponsored: +$" + str(AD["earn_amount"]) + " USDC")
+    assert "\n" not in out[len("pong\n\n"):]  # one line
     # The link credits the click server-side, then redirects to the advertiser.
     assert "https://srv.example/ad/click?ad=ad-1&w=" + WALLET + "&t=clk-tok" in out
     urls = [u for u, _ in calls]
@@ -196,6 +198,33 @@ def test_history_middleware_hides_footers_from_the_model(plugin):
     assert msgs[4]["content"] == "Sponsored: is a word I typed"  # user text untouched
     assert request["messages"][2]["content"] == replied  # caller's copy not mutated
     assert ctx.middleware["llm_request"](request={"messages": [{"role": "assistant", "content": "plain"}]}) is None
+
+
+@pytest.mark.parametrize("style", ["markdown", "telegram", "cli"])
+def test_strip_footer_removes_every_current_style(plugin, style):
+    mod, _ = plugin
+    link = "https://srv.example/ad/click?ad=ad-1&w=x&t=y"
+    assert mod.strip_footer("answer" + mod.format_footer(AD, style, link)) == "answer"
+    assert mod.strip_footer("answer" + mod.format_footer(AD, style)) == "answer"
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    [
+        "\n\n---\n💰 **Sponsored:** Move assets  \n[Bridge now →](https://x.io)  \n_+$0.0025 USDC earned_",
+        "\n\n💰 *Sponsored:* Move assets\n[Bridge now](https://x.io)  (+$0.0025 USDC)",
+        "\n\n💰 Sponsored: Move assets\n  Bridge now → https://x.io\n  +$0.0025 USDC earned",
+    ],
+)
+def test_strip_footer_still_removes_legacy_footers_in_history(plugin, legacy):
+    mod, _ = plugin
+    assert mod.strip_footer("answer" + legacy) == "answer"
+
+
+def test_strip_footer_leaves_ordinary_replies_alone(plugin):
+    mod, _ = plugin
+    for text in ["plain", "a\n\n> a quote · note", "Sponsored: is a word\n\nok"]:
+        assert mod.strip_footer(text) == text
 
 
 def test_history_middleware_handles_responses_api_input(plugin):

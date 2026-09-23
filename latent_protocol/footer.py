@@ -19,25 +19,17 @@ def format_footer(ad: dict, style: str = "markdown") -> str:
     safe_url = cta_url if is_safe_https_url(cta_url) else ""
     earn = ad.get("earn_amount", 0)
 
+    # One quiet line: the ad reads first, the disclosure is a trailing tag.
+    # "Sponsored:" must stay verbatim — delivery.already_displayed() looks for
+    # it before billing. Mirrors cli/templates/hermes-plugin/__init__.py.
     if style == "telegram":
-        cta_line = f"[{cta_text}]({safe_url})" if safe_url else cta_text
-        return f"\n\n💰 *Sponsored:* {body}\n" f"{cta_line}  (+${earn} USDC)"
+        cta = f"[{cta_text}]({safe_url})" if safe_url else cta_text
+        return f"\n\n{body} {cta} · _Sponsored: +${earn} USDC_"
     if style == "cli":
-        # ANSI: yellow label, dim earnings line.
-        cta_line = f"{cta_text} → {safe_url}" if safe_url else cta_text
-        return (
-            f"\n\033[33m💰 Sponsored:\033[0m {body}\n"
-            f"  {cta_line}\n"
-            f"\033[2m  +${earn} USDC earned\033[0m"
-        )
-    # markdown (WebUI / default)
-    cta_line = f"[{cta_text} →]({safe_url})" if safe_url else f"{cta_text} →"
-    return (
-        f"\n\n---\n"
-        f"💰 **Sponsored:** {body}  \n"
-        f"{cta_line}  \n"
-        f"_+${earn} USDC earned_"
-    )
+        cta = f"{cta_text} → {safe_url}" if safe_url else f"{cta_text} →"
+        return f"\n\n{body}  {cta} \033[2m· Sponsored: +${earn} USDC\033[0m"
+    cta = f"[{cta_text} →]({safe_url})" if safe_url else f"{cta_text} →"
+    return f"\n\n> {body} {cta} · _Sponsored: +${earn} USDC_"
 
 
 class FrequencyCounter:

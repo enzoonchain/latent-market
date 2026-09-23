@@ -37,16 +37,16 @@ export function cardHtml(ad: CardAd | null, wallet: string, cspSource = ""): str
     ? `<a href="${escapeHtml(clickHref)}" rel="noreferrer">Learn more →</a>`
     : "";
   const body = ad
-    ? `<div class="ad"><div class="tag">💡 Sponsored</div><div class="txt">${escapeHtml(
+    ? `<div class="ad"><div class="txt">${escapeHtml(
         sanitizeText(ad.text, 200),
-      )}</div>${link}</div>`
+      )}</div>${link}<div class="tag">Sponsored</div></div>`
     : `<div class="idle">No sponsor right now — you still earn while your agent thinks.</div>`;
   const styleSrc = cspSource ? `${cspSource} 'unsafe-inline'` : "'unsafe-inline'";
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${styleSrc}; img-src ${cspSource || "'none'"}">
   <style>
     body{font-family:var(--vscode-font-family);padding:10px;color:var(--vscode-foreground)}
-    .tag{font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.05em}
+    .tag{margin-top:6px;font-size:10px;opacity:.6}
     .txt{margin:6px 0;font-size:13px}
     a{color:var(--vscode-textLink-foreground)}
     .wallet{margin-top:14px;font-size:11px;opacity:.6}

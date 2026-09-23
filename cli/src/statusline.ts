@@ -87,7 +87,7 @@ export function formatStatusline(ad: Ad): string {
   const ctaUrl = ad.cta_url || "";
   const earn = ad.earn_amount ?? 0;
   const cta = osc8Link(`${ctaText} →`, ctaUrl);
-  return `\u001b[33m💰 Sponsored:\u001b[0m ${body}  ${cta}  \u001b[2m·  +$${earn} USDC\u001b[0m`;
+  return `${body}  ${cta}  \u001b[2m· Sponsored: +$${earn} USDC\u001b[0m`;
 }
 
 function loadCache(): Cache {
