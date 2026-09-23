@@ -204,8 +204,8 @@ function formatFooter(ad: Ad): string {
   const cta = sanitizeAdText(ad.cta_text, AD_LIMITS.cta_text) || "Learn more";
   const earn = ad.earn_amount ?? 0;
   const url = typeof ad.cta_url === "string" ? ad.cta_url : "";
-  const ctaLine = isSafeUrl(url) ? `[${cta} →](${url})` : `${cta} →`;
-  return `\n\n---\n💰 **Sponsored:** ${body}  \n${ctaLine}  \n_+$${earn} USDC earned_`;
+  const link = isSafeUrl(url) ? `[${cta} →](${url})` : `${cta} →`;
+  return `\n\n> ${body} ${link} · _Sponsored: +$${earn} USDC_`;
 }
 
 /** MiMo plugin entry point. `experimental.text.complete` is invoked when the

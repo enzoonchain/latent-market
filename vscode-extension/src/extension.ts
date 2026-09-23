@@ -141,7 +141,7 @@ async function startStatusRotation(): Promise<void> {
     }
     current = await fetchAd();
     if (current) {
-      statusItem!.text = `💡 Sponsored: ${sanitizeText(current.text, 48)}`.slice(0, 60);
+      statusItem!.text = `${sanitizeText(current.text, 46)} · Sponsored`;
       statusItem!.tooltip = isSafeHttpUrl(current.url)
         ? current.url
         : "Latent Protocol — sponsored";
@@ -149,7 +149,7 @@ async function startStatusRotation(): Promise<void> {
       tracker.impressionRendered(current.adId);
       if (vscode.window.state.focused) tracker.viewable();
     } else {
-      statusItem!.text = "💡 Latent";
+      statusItem!.text = "Latent";
       statusItem!.show();
     }
   };

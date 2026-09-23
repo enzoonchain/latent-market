@@ -2,20 +2,26 @@
 .latent-ads-footer {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   margin: 8px 0 4px;
   padding: 6px 10px;
-  border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
-  border-radius: 6px;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+  border-radius: 8px;
   font-size: 12px;
   color: var(--muted, inherit);
 }
+.latent-ads-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: contain;
+}
 .latent-ads-label {
+  flex: none;
   font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--warning, #b7791f);
+  opacity: 0.6;
 }
 .latent-ads-body {
   flex: 1 1 auto;
@@ -25,9 +31,6 @@
   color: var(--link, var(--accent, inherit));
   text-decoration: none;
   white-space: nowrap;
-}
-.latent-ads-earn {
-  color: var(--success, #2f855a);
 }
 .latent-ads-footer[hidden] {
   display: none !important;

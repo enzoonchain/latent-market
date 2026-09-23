@@ -84,11 +84,8 @@ def format_statusline(ad: dict) -> str:
     cta_url = ad.get("cta_url", "")
     earn = ad.get("earn_amount", 0)
     cta = _osc8_link(f"{cta_text} →", cta_url)
-    # yellow label · normal body · dim earnings
-    return (
-        f"\033[33m💰 Sponsored:\033[0m {body}  {cta}"
-        f"  \033[2m·  +${earn} USDC\033[0m"
-    )
+    # body · cta, then a quiet dim tag — no loud colour, no emoji.
+    return f"{body}  {cta}  \033[2m· Sponsored: +${earn} USDC\033[0m"
 
 
 # ── Cache (rotation) ─────────────────────────────────────────────────────────

@@ -65,7 +65,8 @@ describe("reply_payload_sending footer", () => {
     registerReplyFooter(api, config(), { paused: false });
     const res = await hooks.reply_payload_sending(final("Here is the answer about solidity"), CTX);
     const text = res.payload.text as string;
-    expect(text.startsWith("Here is the answer about solidity\n\n---\n💰 **Sponsored:** Move assets to Base")).toBe(true);
+    expect(text.startsWith("Here is the answer about solidity\n\n> Move assets to Base")).toBe(true);
+    expect(text).toMatch(/ · _Sponsored: \+\$[^ ]+ USDC_$/);
     expect(text).toContain(`${SERVER}/ad/click?ad=ad-1&w=${WALLET}&t=clk-tok`);
     expect(calls.map((c) => c.url)).toEqual([`${SERVER}/ad/request`]); // not billed yet
 
@@ -134,7 +135,8 @@ describe("reply_payload_sending footer", () => {
     const { api, hooks } = fakeApi();
     registerReplyFooter(api, config(), { paused: false });
     const res = await hooks.reply_payload_sending(final("hi", { channel: "whatsapp" }), { channelId: "whatsapp" });
-    expect(res.payload.text).toContain("💰 Sponsored: Move assets to Base");
+    expect(res.payload.text).toContain("Move assets to Base");
+    expect(res.payload.text).toMatch(/ · Sponsored: \+\$[^ ]+ USDC$/);
     expect(res.payload.text).not.toContain("**");
   });
 });

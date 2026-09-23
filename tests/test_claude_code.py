@@ -65,7 +65,7 @@ def test_fetches_and_logs_impression(env, monkeypatch):
     monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
     line = cc.render({"session_id": "s1", "prompt": "defi"})
     assert "Acme" in line
-    assert "💰 Sponsored" in line
+    assert "Sponsored: +$" in line and "💰" not in line
     assert "https://acme.io" in line  # OSC 8 link target
     client.get_ad.assert_called_once()
     assert client.get_ad.call_args.kwargs["surface"] == "status_line"

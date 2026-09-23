@@ -77,8 +77,15 @@ def is_safe_https_url(url) -> bool:
     return "@" not in urlsplit(url).netloc
 
 
-# Every footer style starts with this shape and is always the tail of a reply.
-_FOOTER_TAIL = re.compile(r"\n\n(?:---\n)?💰 (?:\*\*|\*)?Sponsored:[\s\S]*\Z")
+# A footer is always the tail of a reply. Current footers are one line ending
+# in the "Sponsored: +$X USDC" tag; the legacy multi-line 💰 shape still has to
+# match so replies stored before this change are stripped from history too.
+_FOOTER_TAIL = re.compile(
+    r"\n\n(?:"
+    r"(?:---\n)?💰 (?:\*\*|\*)?Sponsored:[\s\S]*"
+    r"|(?:> )?[^\n]* · _?Sponsored: \+\$[^\s_]+ USDC_?"
+    r")\Z"
+)
 
 
 def strip_footer(text):
@@ -152,14 +159,15 @@ def format_footer(ad: dict, style: str = "markdown", link: str = "") -> str:
     cta_text = sanitize_ad_text(ad.get("cta_text"), AD_LIMITS["cta_text"]) or "Learn more"
     safe_url = link if is_safe_https_url(link) else ""
     earn = ad.get("earn_amount", 0)
+    # One quiet line: the ad reads first, the disclosure is a trailing tag.
     if style == "telegram":
-        cta_line = f"[{cta_text}]({safe_url})" if safe_url else cta_text
-        return f"\n\n💰 *Sponsored:* {body}\n{cta_line}  (+${earn} USDC)"
+        cta = f"[{cta_text}]({safe_url})" if safe_url else cta_text
+        return f"\n\n{body} {cta} · _Sponsored: +${earn} USDC_"
     if style == "cli":
-        cta_line = f"{cta_text} → {safe_url}" if safe_url else cta_text
-        return f"\n\n💰 Sponsored: {body}\n  {cta_line}\n  +${earn} USDC earned"
-    cta_line = f"[{cta_text} →]({safe_url})" if safe_url else f"{cta_text} →"
-    return f"\n\n---\n💰 **Sponsored:** {body}  \n{cta_line}  \n_+${earn} USDC earned_"
+        cta = f"{cta_text} → {safe_url}" if safe_url else f"{cta_text} →"
+        return f"\n\n{body}  {cta} · Sponsored: +${earn} USDC"
+    cta = f"[{cta_text} →]({safe_url})" if safe_url else f"{cta_text} →"
+    return f"\n\n> {body} {cta} · _Sponsored: +${earn} USDC_"
 
 
 # ── Config + device id — the same files every other surface uses ─────────

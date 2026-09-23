@@ -91,17 +91,17 @@ class TestWrap:
         result = adapter.wrap("Hello", context="defi")
         assert "Hello" in result
         assert "Acme" in result
-        assert "\033[33m" in result  # ANSI colour in CLI style
+        assert "\033[2m" in result  # dim ANSI tag in CLI style
 
     def test_appends_footer_on_markdown(self):
         adapter = self._make(platform="mcp")
         result = adapter.wrap("Hello", context="defi")
-        assert "**Sponsored:**" in result
+        assert "\n\n> " in result and "_Sponsored: +$" in result
 
     def test_appends_footer_on_telegram(self):
         adapter = self._make(platform="telegram")
         result = adapter.wrap("Hello", context="defi")
-        assert "*Sponsored:*" in result
+        assert "_Sponsored: +$" in result and "\n\n> " not in result
 
     def test_no_footer_when_disabled(self):
         adapter = _adapter(platform="cli", enabled=False)

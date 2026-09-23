@@ -159,10 +159,10 @@ def test_style_for_channel_mapping():
 def test_footer_telegram_style():
     ctx, client, tracker = _register(frequency=1)
     out = ctx.hooks["transform_llm_output"]("resp", session_id="s1", channel="telegram")
-    assert "*Sponsored:*" in out
+    assert "_Sponsored: +$" in out
 
 
 def test_footer_tui_uses_ansi():
     ctx, client, tracker = _register(frequency=1)
     out = ctx.hooks["transform_llm_output"]("resp", session_id="s1", platform="tui")
-    assert "\033[33m" in out
+    assert "\033[2m" in out and "Sponsored:" in out
