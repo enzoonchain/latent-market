@@ -11,9 +11,9 @@ import * as vscode from "vscode";
 import { loadConfig } from "./config.js";
 import { classifyWorkspace, type Category } from "./classify.js";
 import { Loopback } from "./loopback.js";
-import { BLOCK_BUILD, buildBlock, MARK_START } from "./block.js";
+import { buildBlock, MARK_START } from "./block.js";
 import { buildCursorBlock, CURSOR_BUILD } from "./cursor-block.js";
-import { fileIncludes, fileStamp, findAgentBundles, isPatched, patch, releaseExtensionHost, restore } from "./patcher.js";
+import { findAgentBundles, patch, restore } from "./patcher.js";
 import { refreshKillswitch, shouldServe } from "./health.js";
 import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 import { MIN_VIEW_MS, ViewabilityTracker, type MetricEvent } from "./metrics.js";
@@ -301,7 +301,6 @@ async function applyBundlePatch(
 }
 
 const BUILD_ACK = "latent.cursorBuildAck";
-const toldBundle = new Set<string>();
 let toldOverlayReload = false;
 let overlayAhead = false;
 
@@ -312,40 +311,9 @@ function stopReassert(): void {
   }
 }
 
-const bundleQuiet = new Map<string, string>();
-const releasedHosts = new Set<string>();
-
 function reassertSurfaces(context: vscode.ExtensionContext): void {
   const cur = loadConfig();
   if (!cur.enabled || !policiesOk(context) || !loopback) return;
-  if (cur.patchAgentBundles) {
-    for (const b of findAgentBundles()) {
-      if (!releasedHosts.has(b.extDir)) {
-        releasedHosts.add(b.extDir);
-        releaseExtensionHost(b.extDir);
-      }
-      if (userRestored.has(b.agent)) continue;
-      const stamp = fileStamp(b.bundlePath);
-      const key = stamp ? `${stamp.mtimeMs}:${stamp.size}` : "";
-      if (key && bundleQuiet.get(b.bundlePath) === key) continue;
-      if (isPatched(b.bundlePath) && fileIncludes(b.bundlePath, `LATENT_BUILD = "${BLOCK_BUILD}"`)) {
-        if (key) bundleQuiet.set(b.bundlePath, key);
-        continue;
-      }
-      try {
-        if (checkBundleConflict(readFileSync(b.bundlePath, "utf8")).hasConflict) continue;
-      } catch {
-        continue;
-      }
-      const res = patch(b, buildBlock(loopback.baseUrl, cur.rotateSeconds, category));
-      if (res === "patched" && !toldBundle.has(b.agent)) {
-        toldBundle.add(b.agent);
-        void vscode.window.showInformationMessage(
-          `Latent: the ${b.agent} update removed the sponsor line. It is back — reload the window to show it.`,
-        );
-      }
-    }
-  }
   if (sponsorSurface() === "overlay" && isCursor()) {
     const html = findWorkbenchHtml(vscode.env.appRoot);
     if (html) {
@@ -383,7 +351,6 @@ function restoreAll(announce: boolean, only?: AgentKind): void {
     if (restore(b)) {
       n++;
       userRestored.add(b.agent);
-      toldBundle.delete(b.agent);
     }
   }
   if (announce) void vscode.window.showInformationMessage(`Latent: restored ${n} agent bundle(s).`);
@@ -478,7 +445,6 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
 
   earningsBar?.setAccess(true, cfg.wallet);
 
-  if (cfg.patchAgentBundles) await applyBundlePatch(context, false);
   syncCursorOverlay(false);
   startReassert(context);
   reassertSurfaces(context);
