@@ -12,18 +12,31 @@ class Tracker:
     def __init__(self, server_url: str):
         self.server = server_url.rstrip("/")
 
-    def log_impression(self, ad_id: str, wallet: str, token: str = "") -> None:
+    def log_impression(
+        self,
+        ad_id: str,
+        wallet: str,
+        token: str = "",
+        displayed_ms: int | None = None,
+        event_uuid: str | None = None,
+    ) -> None:
         """Report a confirmed display to the ad server (the server is the
         authority on what is billable). ``token`` is the signed impression
         token from the /ad/request response — required server-side.
 
         Must only be invoked at a display-commit point (footer attached,
-        statusline returned, thinking banner mounted, etc.).
+        statusline returned, thinking banner mounted, etc.). ``displayed_ms``
+        is the on-screen dwell; the server credits only at or above its floor.
         """
+        body: dict = {"ad_id": ad_id, "user_wallet": wallet, "token": token}
+        if displayed_ms is not None:
+            body["displayed_ms"] = int(displayed_ms)
+        if event_uuid:
+            body["event_uuid"] = event_uuid
         try:
             httpx.post(
                 f"{self.server}/ad/impression",
-                json={"ad_id": ad_id, "user_wallet": wallet, "token": token},
+                json=body,
                 timeout=2.0,
             )
         except httpx.HTTPError:

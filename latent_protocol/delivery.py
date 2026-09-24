@@ -60,18 +60,25 @@ def confirm_display(
     tracker: Tracker,
     ad: dict | None,
     wallet: str,
+    displayed_ms: int | None = None,
+    event_uuid: str | None = None,
 ) -> bool:
     """Bill one impression for a creative that was attached to delivered output.
 
     Returns True if an impression POST was attempted (ad had an id). The server
     remains the authority on whether the event is accepted (token, dedup, etc.).
+    ``displayed_ms`` is forwarded when the caller measured real dwell.
     """
     if not ad or not wallet:
         return False
     ad_id = ad.get("ad_id") or ad.get("id") or ""
     if not ad_id:
         return False
-    tracker.log_impression(ad_id, wallet, ad.get("impression_token", ""))
+    token = ad.get("impression_token", "")
+    if displayed_ms is None:
+        tracker.log_impression(ad_id, wallet, token, event_uuid=event_uuid)
+    else:
+        tracker.log_impression(ad_id, wallet, token, displayed_ms=displayed_ms, event_uuid=event_uuid)
     return True
 
 

@@ -17,6 +17,11 @@ const options = {
   format: "cjs",
   target: "node18",
   external: ["vscode"],
+  // Node's default field order picks jsonc-parser's UMD build, which calls
+  // require("./impl/format") at runtime. Those files are not in the VSIX, so
+  // activation dies before the panel or status bar exists. Prefer the ESM
+  // entry so the parser is actually inlined.
+  mainFields: ["module", "main"],
   sourcemap: false,
   logLevel: "info",
 };

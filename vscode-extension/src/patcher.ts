@@ -13,7 +13,7 @@
  * from the webview bundle (see CSP_META_ANCHOR), so both get patched. It is off
  * by default and gated behind an explicit command / setting.
  */
-import { existsSync, readdirSync, readFileSync, renameSync, copyFileSync, writeFileSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { MARK_START, MARK_END } from "./block.js";
@@ -123,7 +123,74 @@ function compareVersionDirs(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/**
+ * Claude Code's chat UI is `webview/index.js`. The host `extension.js` also
+ * contains the substring "Thinking" (`thinkingDisplayExplicit`), so a scan for
+ * spinner verbs selects the host and the sponsor script never runs in the
+ * panel. The webview file is the target, and the CSP relaxation stays in the
+ * sibling host file.
+ */
+export function claudeBundle(extDir: string): Pick<AgentBundle, "bundlePath" | "cspHostPath"> | null {
+  const bundlePath = join(extDir, "webview", "index.js");
+  if (!existsSync(bundlePath)) return null;
+  const host = join(extDir, "extension.js");
+  return { bundlePath, cspHostPath: existsSync(host) ? host : null };
+}
+
+const TAIL_BYTES = 64 * 1024;
+let bundleCache: { stamp: string; bundles: AgentBundle[] } | null = null;
+
+function discoveryStamp(): string {
+  const parts: string[] = [];
+  for (const root of extensionRoots()) {
+    let names: string[] = [];
+    try {
+      names = readdirSync(root);
+    } catch {
+      continue;
+    }
+    parts.push(root + "\0" + names.filter((n) => agentFor(n)).sort().join("\0"));
+  }
+  return parts.join("\n");
+}
+
+export function fileStamp(path: string): { mtimeMs: number; size: number } | null {
+  try {
+    const st = statSync(path);
+    return { mtimeMs: st.mtimeMs, size: st.size };
+  } catch {
+    return null;
+  }
+}
+
+/** The sponsor block is appended, so the marker lives in the tail. */
+export function tailIncludes(path: string, needle: string): boolean {
+  let fd: number | null = null;
+  try {
+    const st = statSync(path);
+    const len = Math.min(st.size, TAIL_BYTES);
+    const buf = Buffer.alloc(len);
+    fd = openSync(path, "r");
+    readSync(fd, buf, 0, len, Math.max(0, st.size - len));
+    return buf.toString("utf8").includes(needle);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
+}
+
 export function findAgentBundles(): AgentBundle[] {
+  const stamp = discoveryStamp();
+  if (bundleCache?.stamp === stamp && bundleCache.bundles.every((b) => existsSync(b.bundlePath))) {
+    return bundleCache.bundles;
+  }
+  const bundles = locateAgentBundles();
+  bundleCache = { stamp, bundles };
+  return bundles;
+}
+
+function locateAgentBundles(): AgentBundle[] {
   const out: AgentBundle[] = [];
   const seen = new Set<AgentKind>();
   for (const root of extensionRoots()) {
@@ -138,6 +205,13 @@ export function findAgentBundles(): AgentBundle[] {
       const agent = agentFor(name);
       if (!agent || seen.has(agent)) continue;
       const extDir = join(root, name);
+      if (agent === "claude-code") {
+        const hit = claudeBundle(extDir);
+        if (!hit) continue;
+        out.push({ agent, extDir, bundlePath: hit.bundlePath, cspHostPath: hit.cspHostPath });
+        seen.add(agent);
+        continue;
+      }
       const bundle = findBundleJs(extDir);
       if (bundle) {
         const cspHost = findCspHostJs(extDir);
@@ -150,11 +224,7 @@ export function findAgentBundles(): AgentBundle[] {
 }
 
 export function isPatched(bundlePath: string): boolean {
-  try {
-    return readFileSync(bundlePath, "utf8").includes(MARK_START);
-  } catch {
-    return false;
-  }
+  return tailIncludes(bundlePath, MARK_START);
 }
 
 /** Add a 127.0.0.1 loopback allowance to any CSP connect-src in the bundle. */
@@ -182,23 +252,42 @@ export function relaxCsp(content: string): string {
 function patchCspHostFile(hostPath: string): void {
   try {
     const backup = hostPath + BACKUP_SUFFIX;
-    if (!existsSync(backup)) copyFileSync(hostPath, backup);
+    if (!existsSync(backup)) {
+      // A sponsor block never belongs in the host. An older locator appended
+      // it here; keep the backup without that block.
+      writeFileSync(backup, stripLatentBlock(readFileSync(hostPath, "utf8")));
+    }
     // From pristine every time: relaxCsp's default-src rule is not idempotent.
-    const pristine = readFileSync(backup, "utf8");
+    const pristine = stripLatentBlock(readFileSync(backup, "utf8"));
     const relaxed = relaxCsp(pristine);
-    if (relaxed !== pristine) writeFileSync(hostPath, relaxed);
+    if (relaxed !== readFileSync(hostPath, "utf8")) writeFileSync(hostPath, relaxed);
   } catch {
     /* best effort */
   }
 }
 
+/** Drop our marker block. Foreign markers (e.g. VIBE-ADS) are left in place. */
+export function stripLatentBlock(content: string): string {
+  const s = content.indexOf(MARK_START);
+  const e = content.indexOf(MARK_END);
+  if (s === -1 || e === -1 || e < s) return content;
+  return (content.slice(0, s) + content.slice(e + MARK_END.length)).replace(/\n{3,}/g, "\n\n");
+}
+
 export function patch(bundle: AgentBundle, block: string): "patched" | "incompatible" | "error" {
   try {
     const original = readFileSync(bundle.bundlePath, "utf8");
-    if (!VERB_ANCHORS.some((v) => original.includes(v))) return "incompatible";
+    if (!VERB_ANCHORS.some((v) => original.includes(v)) && !VERB_ANCHORS.some((v) => stripLatentBlock(original).includes(v))) {
+      return "incompatible";
+    }
 
     const backup = bundle.bundlePath + BACKUP_SUFFIX;
-    if (!existsSync(backup)) copyFileSync(bundle.bundlePath, backup);
+    if (!existsSync(backup)) {
+      // Fossil: a live file that already carries our block has no pristine copy.
+      // Strip only our marker and keep that as the backup, then patch from it.
+      const seed = original.includes(MARK_START) ? stripLatentBlock(original) : original;
+      writeFileSync(backup, seed);
+    }
 
     // Start from pristine so re-patching never stacks blocks.
     const pristine = readFileSync(backup, "utf8");

@@ -33,6 +33,29 @@ describe("buildCursorBlock", () => {
     expect(block).toContain("view_threshold_met");
   });
 
+  it("renders an icon, an Open button, and a Copy button", () => {
+    expect(block).toContain("data-latent-icon");
+    expect(block).toContain("data-latent-open");
+    expect(block).toContain("data-latent-copy");
+    expect(block).toContain('textContent = "Open"');
+  });
+
+  it("docks to the composer box instead of the window center", () => {
+    expect(block).toContain(".full-input-box");
+    expect(block).toContain("composer-toolbar-section");
+    expect(block).toContain("data-latent-dock");
+    expect(block).toContain("elementsFromPoint");
+    expect(block).toContain("/hello?build=");
+    expect(block).toContain("earnAmount");
+    expect(block).toContain('"+$"');
+    expect(block).toContain("visibilityState");
+    expect(block).toContain('j.status === "tracked"');
+    expect(block).toContain("syncDock(null, 0)");
+    expect(block).toContain("getBoundingClientRect");
+    expect(block).not.toContain("bottom:72px");
+    expect(block).not.toContain("translateX(-50%)");
+  });
+
   it("is idempotent (guards against double-eval)", () => {
     expect(block).toContain("__latentCursorBoot");
   });

@@ -1,8 +1,9 @@
 {
   "name": "latent-protocol-vscode",
-  "displayName": "Latent Protocol — Sponsored Spinner",
-  "description": "Earn USDC while your coding agent thinks. Shows a labeled sponsor line in the agent's spinner/status area (Cursor, VS Code, Claude Code, Codex).",
-  "version": "0.3.0",
+  "displayName": "Latent Ads Market - Monetize the attention of Agents",
+  "description": "A labeled sponsor line while your coding agent works, and your USDC balance in the Latent panel.",
+  "version": "0.5.10",
+  "icon": "media/icon.png",
   "publisher": "latent-protocol",
   "license": "Apache-2.0",
   "repository": {
@@ -24,44 +25,60 @@
     "commands": [
       {
         "command": "latent.enable",
-        "title": "Latent: Enable sponsored spinner"
+        "title": "Latent Ads: Enable sponsor line"
       },
       {
         "command": "latent.disable",
-        "title": "Latent: Disable sponsored spinner"
+        "title": "Latent Ads: Disable sponsor line"
       },
       {
         "command": "latent.patchAgentBundles",
-        "title": "Latent: Patch agent spinner (in-agent ads, advanced)"
+        "title": "Latent Ads: Patch agent bundles (advanced)"
       },
       {
         "command": "latent.restore",
-        "title": "Latent: Restore agent bundles (undo patch)"
+        "title": "Latent Ads: Restore agent bundles"
+      },
+      {
+        "command": "latent.openPanel",
+        "title": "Latent Ads: Open panel"
+      },
+      {
+        "command": "latent.openSponsor",
+        "title": "Latent Ads: Open sponsored link"
+      },
+      {
+        "command": "latent.copySponsor",
+        "title": "Latent Ads: Copy sponsored link"
+      },
+      {
+        "command": "latent.diagnose",
+        "title": "Latent Ads: Diagnose"
       },
       {
         "command": "latent.showEarnings",
-        "title": "Latent: Show earnings"
+        "title": "Latent Ads: Show earnings"
       },
       {
         "command": "latent.checkConflicts",
-        "title": "Latent: Check for hook conflicts"
+        "title": "Latent Ads: Check for hook conflicts"
       },
       {
         "command": "latent.installCliHook",
-        "title": "Latent: Install Claude CLI hook"
+        "title": "Latent Ads: Install Claude CLI hook"
       },
       {
         "command": "latent.removeCliHook",
-        "title": "Latent: Remove Claude CLI hook"
+        "title": "Latent Ads: Remove Claude CLI hook"
       }
     ],
     "configuration": {
-      "title": "Latent Protocol",
+      "title": "Latent Ads Market",
       "properties": {
         "latent.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Master on/off for the sponsored spinner."
+          "description": "Master on/off for the sponsor line."
         },
         "latent.wallet": {
           "type": "string",
@@ -76,25 +93,40 @@
         "latent.patchAgentBundles": {
           "type": "boolean",
           "default": false,
-          "description": "Advanced/invasive: runtime-patch the installed Claude Code / Codex extension webview bundle to render the sponsor line inside its native spinner. Reversible (pristine backup + Latent: Restore), but it modifies a third-party extension and relaxes its webview CSP to reach the local loopback. Off by default — the non-invasive status-bar + sidebar fallback is always available."
+          "description": "Advanced: patch the installed Claude Code or Codex webview so a sponsor line can sit under its thinking row. Reversible (pristine backup + Latent Ads: Restore). It modifies a third-party extension and relaxes that webview's CSP for the local loopback only. Off by default. The floating composer line does not need this."
         },
         "latent.rotateSeconds": {
           "type": "number",
           "default": 10,
           "description": "How often the shown sponsor line rotates."
         },
+        "latent.sponsorSurface": {
+          "type": "string",
+          "enum": ["statusbar", "overlay"],
+          "default": "statusbar",
+          "description": "Unused. The sponsor line is the floating composer line. The status bar shows Latent Menu and the balance."
+        },
         "latent.cursorOverlay": {
           "type": "boolean",
           "default": false,
-          "description": "Experimental, Cursor only: show the sponsor line in the agent composer area. Adds one script tag to Cursor's workbench.html (pristine backup kept, restored on disable/uninstall); Cursor may report its installation as modified while this is on. Re-applied after Cursor updates."
+          "description": "Unused. Sponsor placement is latent.sponsorSurface."
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "latent",
+          "title": "Latent Ads",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "latent": [
         {
           "id": "latentSponsor",
-          "name": "Latent Sponsor",
+          "name": "Latent Ads",
           "type": "webview"
         }
       ]

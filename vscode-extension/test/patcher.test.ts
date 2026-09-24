@@ -1,13 +1,37 @@
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
+import { claudeBundle, isPatched, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
 
 // Shapes taken from an installed Claude Code 2.1.278.
 const MONACO_TOKENIZER = 'tokenizer:{root:[[/child-src/,"string.quote"],[/connect-src/,"string.quote"],[/default-src/,"string.quote"]]}';
 const HOST_CSP =
   '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'nonce-{{NONCE}}\'; img-src data:;">';
+
+describe("claudeBundle", () => {
+  it("targets webview/index.js even when extension.js contains Thinking", () => {
+    const dir = mkdtempSync(join(tmpdir(), "latent-cc-"));
+    const webview = join(dir, "webview");
+    mkdirSync(webview);
+    writeFileSync(join(dir, "extension.js"), `function thinkingDisplayExplicit(){}\n${HOST_CSP}`);
+    writeFileSync(join(webview, "index.js"), 'var verbs=["Clauding","Discombobulating"];');
+    const hit = claudeBundle(dir);
+    expect(hit?.bundlePath).toBe(join(webview, "index.js"));
+    expect(hit?.cspHostPath).toBe(join(dir, "extension.js"));
+  });
+});
+
+describe("isPatched", () => {
+  it("reads the marker from the tail, not from the start of a large file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "latent-tail-"));
+    const file = join(dir, "index.js");
+    writeFileSync(file, `${"x".repeat(80_000)}/* LATENT-START */`);
+    expect(isPatched(file)).toBe(true);
+    writeFileSync(file, `/* LATENT-START */${"x".repeat(80_000)}`);
+    expect(isPatched(file)).toBe(false);
+  });
+});
 
 describe("relaxCsp", () => {
   it("leaves a /connect-src/ regex literal untouched (it used to become a SyntaxError)", () => {
@@ -50,6 +74,28 @@ describe("patch / restore", () => {
     patch(b, "/* LATENT-START */;/* LATENT-END */");
     patch(b, "/* LATENT-START */;/* LATENT-END */");
     expect(readFileSync(b.cspHostPath!, "utf8").match(/connect-src/g)).toHaveLength(1);
+  });
+
+  it("mints a pristine backup from a live file that already carries the block", () => {
+    const b = fixture();
+    const pristine = readFileSync(b.bundlePath, "utf8");
+    writeFileSync(b.bundlePath, `${pristine}\n/* LATENT-START */old/* LATENT-END */\n`);
+    expect(patch(b, "/* LATENT-START */new/* LATENT-END */")).toBe("patched");
+    const backup = readFileSync(b.bundlePath + ".latent-backup", "utf8");
+    expect(backup).not.toContain("LATENT-START");
+    expect(backup).toContain("Thinking");
+    expect(readFileSync(b.bundlePath, "utf8")).toContain("LATENT-START */new");
+  });
+
+  it("drops a sponsor block that an older locator left in the CSP host", () => {
+    const b = fixture();
+    const host = readFileSync(b.cspHostPath!, "utf8");
+    writeFileSync(b.cspHostPath!, `${host}\n/* LATENT-START */nope/* LATENT-END */\n`);
+    expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
+    const after = readFileSync(b.cspHostPath!, "utf8");
+    expect(after).not.toContain("LATENT-START");
+    expect(after).toContain("connect-src http://127.0.0.1:*");
+    expect(readFileSync(b.bundlePath, "utf8")).toContain("LATENT-START");
   });
 
   it("restore puts both files back byte-for-byte", () => {

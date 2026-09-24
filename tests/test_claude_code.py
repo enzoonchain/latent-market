@@ -69,31 +69,102 @@ def test_fetches_and_logs_impression(env, monkeypatch):
     assert "https://acme.io" in line  # OSC 8 link target
     client.get_ad.assert_called_once()
     assert client.get_ad.call_args.kwargs["surface"] == "status_line"
-    tracker.log_impression.assert_called_once_with("ad-1", "0xDEADBEEF", "tok-abc")
+    tracker.log_impression.assert_not_called()
+
+
+def test_bills_after_ten_seconds(env, monkeypatch):
+    client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    times = iter([1000.0, 1010.0])
+    monkeypatch.setattr(cc.time, "time", lambda: next(times))
+    cc.render({"session_id": "s1"})
+    cc.render({"session_id": "s1"})
+    assert client.get_ad.call_count == 1
+    tracker.log_impression.assert_called_once()
+    args, kwargs = tracker.log_impression.call_args
+    assert args == ("ad-1", "0xDEADBEEF", "tok-abc")
+    assert kwargs["displayed_ms"] == 10000
+    assert isinstance(kwargs["event_uuid"], str) and kwargs["event_uuid"]
 
 
 def test_reuses_cache_within_rotation_window(env, monkeypatch):
     client, tracker = env
     monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
-    times = iter([1000.0, 1005.0, 1009.0])  # all within 30s window
+    times = iter([1000.0, 1005.0, 1009.0])  # all within 30s window, under 10s dwell
     monkeypatch.setattr(cc.time, "time", lambda: next(times))
     cc.render({"session_id": "s1"})
     cc.render({"session_id": "s1"})
     cc.render({"session_id": "s1"})
-    # Only the first refresh fetched + billed; the rest reused the cache.
     assert client.get_ad.call_count == 1
-    assert tracker.log_impression.call_count == 1
+    tracker.log_impression.assert_not_called()
 
 
 def test_refetches_after_rotation_window(env, monkeypatch):
     client, tracker = env
     monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
-    times = iter([1000.0, 1040.0])  # second call is >30s later
+    times = iter([1000.0, 1040.0, 1050.0])
     monkeypatch.setattr(cc.time, "time", lambda: next(times))
     cc.render({"session_id": "s1"})
-    cc.render({"session_id": "s1"})
+    cc.render({"session_id": "s1"})  # bills the first ad (40s), fetches the next
+    cc.render({"session_id": "s1"})  # bills the second ad (10s)
     assert client.get_ad.call_count == 2
     assert tracker.log_impression.call_count == 2
+
+
+def test_two_second_view_is_dropped_on_reopen(env, monkeypatch):
+    """Closed before the view floor: that impression is not billed."""
+    _client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    cc._CACHE_FILE.write_text(json.dumps({
+        "ad": FAKE_AD,
+        "fetched_at": 1_000.0,
+        "shown_at_ms": 1_000_000,
+        "last_seen_ms": 1_002_000,
+        "session_id": "s1",
+        "billed": False,
+        "event_uuid": "evt-short",
+    }))
+    monkeypatch.setattr(cc.time, "time", lambda: 1_000.0 + 86_400)
+    cc.render({"session_id": "other-session"})
+    tracker.log_impression.assert_not_called()
+
+
+def test_reopen_bills_the_last_poll_not_the_gap(env, monkeypatch):
+    _client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    cc._CACHE_FILE.write_text(json.dumps({
+        "ad": FAKE_AD,
+        "fetched_at": 1_000.0,
+        "shown_at_ms": 1_000_000,
+        "last_seen_ms": 1_015_000,
+        "session_id": "s1",
+        "billed": False,
+        "event_uuid": "evt-long",
+    }))
+    monkeypatch.setattr(cc.time, "time", lambda: 1_000.0 + 86_400)
+    cc.render({"session_id": "other-session"})
+    tracker.log_impression.assert_called_once()
+    assert tracker.log_impression.call_args.kwargs["displayed_ms"] == 15_000
+
+
+def test_unshown_cache_is_not_billed(env, monkeypatch):
+    _client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    cc._CACHE_FILE.write_text(json.dumps({
+        "ad": FAKE_AD,
+        "fetched_at": 1_000.0,
+        "session_id": "s1",
+        "billed": False,
+    }))
+    monkeypatch.setattr(cc.time, "time", lambda: 1_000.0 + 86_400)
+    cc.render({"session_id": "s1"})
+    billed = [
+        c for c in tracker.log_impression.call_args_list
+        if c.args and c.args[0] == "ad-1" and c.kwargs.get("displayed_ms", 0) > cc._MAX_DISPLAY_MS
+    ]
+    assert billed == []
+    if tracker.log_impression.called:
+        assert tracker.log_impression.call_args.kwargs["displayed_ms"] <= cc._MAX_DISPLAY_MS
 
 
 def test_no_ad_returns_empty(env, monkeypatch):
@@ -130,6 +201,24 @@ def test_uninstall_removes_only_ours(env):
     data = json.loads(cc._CLAUDE_SETTINGS.read_text())
     assert "statusLine" not in data
     assert data["theme"] == "dark"
+
+
+def test_statusline_plain_shape_appends_a_short_url(monkeypatch):
+    monkeypatch.setenv("TMUX", "1")
+    line = cc.format_statusline(FAKE_AD)
+    assert "ad· " in line
+    assert "\033]8;;" not in line
+    assert "https://acme.io" in line
+
+
+def test_statusline_osc8_shape_hides_a_long_bare_url(monkeypatch):
+    monkeypatch.setenv("TERM_PROGRAM", "vscode")
+    monkeypatch.delenv("TMUX", raising=False)
+    long_url = "https://acme.io/" + ("a" * 200)
+    line = cc.format_statusline({**FAKE_AD, "cta_url": long_url})
+    assert "\033]8;;" in line
+    assert long_url in line  # inside the OSC 8 payload
+    assert f"  {long_url}" not in line.split("\033]8;;", 1)[-1]
 
 
 def test_osc8_only_for_safe_https():

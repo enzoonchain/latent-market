@@ -16,6 +16,19 @@ describe("buildBlock", () => {
 
   it("is idempotent (guards against double-eval)", () => {
     expect(block).toContain("__latentActive");
+    expect(block).toContain("&pane=");
+  });
+
+  it("paints on document.body and does not mutate the spinner row", () => {
+    expect(block).toContain("document.body");
+    expect(block).toContain("position:fixed");
+    expect(block).toContain("r.bottom");
+    expect(block).toContain("cadencedShimmer");
+    expect(block).toContain("statusRow_");
+    expect(block).toContain("data-latent-spinner");
+    expect(block).not.toContain("editor-background");
+    expect(block).not.toContain("MutationObserver");
+    expect(block).not.toContain("s.appendChild");
   });
 
   it("wraps in a fail-open IIFE", () => {
@@ -27,7 +40,7 @@ describe("buildBlock", () => {
   it("bills exactly one signed impression per ad cycle", () => {
     expect(block).toContain("/impression");
     expect(block).toContain("displayedMs");
-    expect(block).toContain("token: cur.token");
+    expect(block).toContain("token: ad.token");
     // one-bill-per-cycle guard
     expect(block).toContain("billed");
   });

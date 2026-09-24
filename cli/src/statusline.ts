@@ -31,12 +31,28 @@ const MIN_DISPLAY_MS_BEFORE_BILL = 3000;
 // cache from a much earlier, since-abandoned session shouldn't report hours
 // of "dwell time".
 const MAX_DISPLAY_MS = 600_000;
+// A poll this long after the previous one means the line was closed. The gap
+// is not billed. Anything under MIN_DISPLAY_MS_BEFORE_BILL is dropped.
+const CONTINUITY_MS = 180_000;
+
+function noteSeen(cache: Cache, nowMs: number): void {
+  if (cache.shown_at_ms === undefined) return;
+  const seen = cache.last_seen_ms ?? cache.shown_at_ms;
+  if (nowMs - seen <= CONTINUITY_MS) cache.last_seen_ms = nowMs;
+}
+
+function elapsedMs(cache: Cache): number {
+  if (cache.shown_at_ms === undefined || cache.last_seen_ms === undefined) return 0;
+  return Math.max(0, Math.min(cache.last_seen_ms - cache.shown_at_ms, MAX_DISPLAY_MS));
+}
 
 interface Cache {
   ad?: Ad;
   fetched_at?: number;
   /** Epoch ms when this cached ad was first served — the dwell-time baseline. */
   shown_at_ms?: number;
+  /** Epoch ms of the last status-line poll that still counted as on screen. */
+  last_seen_ms?: number;
   session_id?: string;
   /**
    * True once POST /ad/impression has been sent for this cached ad.
@@ -79,15 +95,39 @@ function osc8Link(text: string, url: string): string {
   return `\u001b]8;;${url}\u001b\\${text}\u001b]8;;\u001b\\`;
 }
 
+const MAX_BARE_URL = 120;
+
+/** osc8 = the text is the link. plain = short URL beside it. hybrid = both. */
+function linkShape(): "osc8" | "plain" | "hybrid" {
+  const e = process.env;
+  if (e.TMUX) return "plain";
+  if (e.SSH_TTY || e.SSH_CONNECTION) return "hybrid";
+  if (e.KITTY_WINDOW_ID || e.WEZTERM_PANE || e.ITERM_SESSION_ID) return "osc8";
+  if (e.ALACRITTY_SOCKET || e.ALACRITTY_WINDOW_ID) return "plain";
+  const term = e.TERM_PROGRAM || "";
+  if (term === "vscode" || term === "iTerm.app" || term === "WezTerm") return "osc8";
+  if (term === "Apple_Terminal" || term === "WarpTerminal") return "plain";
+  if (e.WT_SESSION) return "osc8";
+  return process.platform === "win32" ? "plain" : "hybrid";
+}
+
 export function formatStatusline(ad: Ad): string {
   // Advertiser-controlled — strip escape sequences / control chars before this
   // reaches the terminal. isSafeUrl() already guards the OSC 8 link target.
-  const body = sanitizeAdText(ad.body || ad.title || "", AD_LIMITS.body);
-  const ctaText = sanitizeAdText(ad.cta_text || "Learn more", AD_LIMITS.cta_text) || "Learn more";
+  const body = sanitizeAdText(ad.body || ad.title || "", AD_LIMITS.body) || "Sponsored";
   const ctaUrl = ad.cta_url || "";
   const earn = ad.earn_amount ?? 0;
-  const cta = osc8Link(`${ctaText} →`, ctaUrl);
-  return `${body}  ${cta}  \u001b[2m· Sponsored: +$${earn} USDC\u001b[0m`;
+  const label = `ad· ${body}`;
+  const bare = isSafeUrl(ctaUrl) && ctaUrl.length <= MAX_BARE_URL ? `  ${ctaUrl}` : "";
+  const shape = linkShape();
+  const linked = !isSafeUrl(ctaUrl)
+    ? label
+    : shape === "osc8"
+      ? osc8Link(label, ctaUrl)
+      : shape === "plain"
+        ? label + bare
+        : osc8Link(label, ctaUrl) + bare;
+  return `${linked}  \u001b[2m· Sponsored: +$${earn} USDC\u001b[0m`;
 }
 
 function loadCache(): Cache {
@@ -173,24 +213,30 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
         // mint the idempotency key up front so every later attempt to bill
         // this same occurrence (fresh-branch or the flush-on-rotation path
         // below) reuses one event_uuid.
-        saveCache({ ...cache, shown_at_ms: Date.now(), event_uuid: cache.event_uuid ?? randomUUID() });
+        saveCache({
+          ...cache,
+          shown_at_ms: Date.now(),
+          last_seen_ms: Date.now(),
+          event_uuid: cache.event_uuid ?? randomUUID(),
+        });
         return line;
       }
-      const elapsedMs = Math.min(Date.now() - cache.shown_at_ms, MAX_DISPLAY_MS);
-      if (elapsedMs >= MIN_DISPLAY_MS_BEFORE_BILL) {
+      noteSeen(cache, Date.now());
+      const shownMs = elapsedMs(cache);
+      if (shownMs >= MIN_DISPLAY_MS_BEFORE_BILL) {
         const eventId = cache.event_uuid ?? randomUUID();
         await logImpression(
           cache.ad.ad_id || cache.ad.id || "",
           wallet,
           cache.ad.impression_token || "",
           server,
-          elapsedMs,
+          shownMs,
           eventId,
         );
         saveCache({ ...cache, billed: true, event_uuid: eventId });
+      } else {
+        saveCache(cache);
       }
-      // else: not enough elapsed time yet — try again on the next poll
-      // while this ad is still fresh; no bill, no cache write.
     }
     return line;
   }
@@ -204,15 +250,16 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
   // prefetched and this status line never got to render (shown_at_ms still
   // unset) must never be billed — nobody saw it.
   if (cache.ad && !cache.billed && cache.shown_at_ms !== undefined) {
+    noteSeen(cache, Date.now());
+    const staleMs = elapsedMs(cache);
     const staleAdId = cache.ad.ad_id || cache.ad.id || "";
-    if (staleAdId) {
-      const elapsedMs = Math.min(Date.now() - cache.shown_at_ms, MAX_DISPLAY_MS);
+    if (staleAdId && staleMs >= MIN_DISPLAY_MS_BEFORE_BILL) {
       await logImpression(
         staleAdId,
         wallet,
         cache.ad.impression_token || "",
         server,
-        elapsedMs,
+        staleMs,
         cache.event_uuid ?? randomUUID(),
       );
     }
@@ -237,6 +284,7 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
     ad,
     fetched_at: now,
     shown_at_ms: Date.now(),
+    last_seen_ms: Date.now(),
     session_id: sessionId,
     billed: false,
     event_uuid: randomUUID(),

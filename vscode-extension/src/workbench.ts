@@ -14,11 +14,14 @@
  * `vscode:uninstall` hook (a plain node process with no `vscode.env.appRoot`)
  * can still find and restore it.
  *
- * Cursor verifies its install checksums; while patched it may show a
- * "your installation appears to be corrupt" notice. A Cursor update replaces
- * workbench.html, which silently drops the patch — `patchWorkbench` is
- * idempotent and re-run on startup.
+ * Cursor verifies install checksums in product.json. After writing
+ * workbench.html we rewrite that one checksum to the new bytes, and put the
+ * pristine checksum back on restore, so the "installation appears to be
+ * corrupt" notice does not stay up while the overlay is on. A Cursor update
+ * replaces workbench.html, which silently drops the patch — `patchWorkbench`
+ * is idempotent and re-run on startup.
  */
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -83,6 +86,56 @@ export function injectTag(html: string): string {
   return close === -1 ? clean + tag + "\n" : clean.slice(0, close) + tag.trimStart() + "\n" + clean.slice(close);
 }
 
+const CHECKSUM_KEY = "vs/code/electron-sandbox/workbench/workbench.html";
+
+function productJsonPath(htmlPath: string): string {
+  return join(dirname(htmlPath), "..", "..", "..", "..", "..", "product.json");
+}
+
+function sha256Base64(buf: Buffer): string {
+  return createHash("sha256").update(buf).digest("base64").replace(/=+$/, "");
+}
+
+/** Keep product.json's workbench.html checksum equal to the file on disk. No-op when product.json has no such entry. */
+export function syncWorkbenchChecksum(htmlPath: string): void {
+  const product = productJsonPath(htmlPath);
+  if (!existsSync(product) || !existsSync(htmlPath)) return;
+  let text: string;
+  try {
+    text = readFileSync(product, "utf8");
+  } catch {
+    return;
+  }
+  const keyAt = text.indexOf(`"${CHECKSUM_KEY}"`);
+  if (keyAt === -1) return;
+  const colon = text.indexOf(":", keyAt + CHECKSUM_KEY.length);
+  const q1 = colon === -1 ? -1 : text.indexOf('"', colon + 1);
+  const q2 = q1 === -1 ? -1 : text.indexOf('"', q1 + 1);
+  if (q1 === -1 || q2 === -1) return;
+  const sum = sha256Base64(readFileSync(htmlPath));
+  const next = text.slice(0, q1 + 1) + sum + text.slice(q2);
+  if (next !== text) writeFileSync(product, next);
+}
+
+/** True when product.json has no workbench.html checksum, or it matches the file. */
+export function workbenchChecksumMatches(htmlPath: string): boolean {
+  const product = productJsonPath(htmlPath);
+  if (!existsSync(product) || !existsSync(htmlPath)) return true;
+  let text: string;
+  try {
+    text = readFileSync(product, "utf8");
+  } catch {
+    return true;
+  }
+  const keyAt = text.indexOf(`"${CHECKSUM_KEY}"`);
+  if (keyAt === -1) return true;
+  const colon = text.indexOf(":", keyAt + CHECKSUM_KEY.length);
+  const q1 = colon === -1 ? -1 : text.indexOf('"', colon + 1);
+  const q2 = q1 === -1 ? -1 : text.indexOf('"', q1 + 1);
+  if (q1 === -1 || q2 === -1) return true;
+  return text.slice(q1 + 1, q2) === sha256Base64(readFileSync(htmlPath));
+}
+
 export function isWorkbenchPatched(htmlPath: string): boolean {
   try {
     return readFileSync(htmlPath, "utf8").includes(WB_MARK_START);
@@ -102,6 +155,7 @@ export function patchWorkbench(htmlPath: string, blockJs: string): "patched" | "
     }
     writeFileSync(join(dirname(htmlPath), WB_BLOCK_FILE), blockJs);
     writeFileSync(htmlPath, injectTag(readFileSync(backup, "utf8")));
+    syncWorkbenchChecksum(htmlPath);
     writeRegistry([...readRegistry(), htmlPath]);
     return "patched";
   } catch {
@@ -119,6 +173,7 @@ export function restoreWorkbench(htmlPath: string): boolean {
       writeFileSync(htmlPath, stripTag(readFileSync(htmlPath, "utf8")));
     }
     rmSync(join(dirname(htmlPath), WB_BLOCK_FILE), { force: true });
+    syncWorkbenchChecksum(htmlPath);
     writeRegistry(readRegistry().filter((p) => p !== htmlPath));
     return true;
   } catch {
