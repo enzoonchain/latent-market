@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Latent Launch Film</title>
+<style>
+@font-face{font-family:Inter;src:url(fonts/Inter.woff2) format('woff2');font-weight:100 900;font-display:block}
+@font-face{font-family:JBM;src:url(fonts/JetBrainsMono.woff2) format('woff2');font-weight:100 800;font-display:block}
+:root{--sky:#E6F0FF;--cloud:#C7DDF7;--primary:#6B9EFF;--deep:#2E5BFF;--slate:#0F172A;--white:#FFFFFF}
+html,body{margin:0;background:#000;overflow:hidden}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:#04060c;font-family:Inter,'DejaVu Sans',sans-serif;color:var(--slate);transform-origin:0 0}
+.layer{position:absolute;inset:0}
+canvas.layer{width:1920px;height:1080px}
+.mono{font-family:JBM,'DejaVu Sans Mono',monospace}
+.sym{font-family:'DejaVu Sans',sans-serif}
+
+/* ---------- Act 1/2: terminal ---------- */
+#cam1{transform-origin:960px 560px}
+.win{position:absolute;left:300px;top:320px;width:1320px;height:460px;border-radius:22px;background:linear-gradient(180deg,#111a2e,#0b1120);box-shadow:0 0 0 1px rgba(148,178,255,.14),0 40px 120px rgba(0,0,0,.6),0 0 160px rgba(46,91,255,.08);overflow:hidden}
+.bar{height:54px;display:flex;align-items:center;gap:10px;padding:0 22px;border-bottom:1px solid rgba(148,178,255,.08);color:#5d6b88;font-size:17px}
+.bar i{width:13px;height:13px;border-radius:50%;background:#26324b;display:block}
+.bar span{margin-left:14px;font-family:JBM,monospace;letter-spacing:.01em}
+.body{padding:34px 44px;font-family:JBM,'DejaVu Sans Mono',monospace;font-size:27px;line-height:1.75;color:#d7e2ff}
+.dim{color:#56637f}
+.chev{color:#6B9EFF;margin-right:18px}
+.cursor{display:inline-block;width:14px;height:31px;background:#d7e2ff;vertical-align:-5px;margin-left:3px}
+.think{margin-top:18px;white-space:pre}
+.shimmer{background:linear-gradient(90deg,#c7755a 0%,#c7755a 35%,#ffd2bf 50%,#c7755a 65%,#c7755a 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
+#spin{color:#e0896a;display:inline-block;width:30px}
+.rule{height:1px;background:rgba(148,178,255,.12);margin:34px 0 18px}
+#status{position:relative;height:48px;font-size:23px}
+#status > div{position:absolute;left:0;top:0;white-space:pre}
+#statusAd{display:flex;align-items:center;gap:16px}
+.adtag{font-family:Inter,sans-serif;font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#9fbcff;border:1px solid rgba(107,158,255,.45);padding:3px 10px;border-radius:999px}
+.adtxt{background:linear-gradient(90deg,#6B9EFF,#ffffff 45%,#6B9EFF 60%,#6B9EFF);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
+.adcta{color:#fff;border-bottom:1px solid rgba(255,255,255,.4)}
+#pill{position:absolute;right:22px;top:11px;height:32px;display:flex;align-items:center;gap:10px;padding:0 16px;border-radius:999px;background:rgba(46,91,255,.16);border:1px solid rgba(107,158,255,.4);color:#cfe0ff;font-size:16px;font-weight:500}
+#pill b{color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+#floatUp{position:absolute;left:1400px;top:300px;font-size:30px;font-weight:600;color:#9fc0ff;font-variant-numeric:tabular-nums;text-shadow:0 0 30px rgba(107,158,255,.7)}
+.cap{position:absolute;left:0;right:0;text-align:center;font-weight:500;letter-spacing:-.02em;color:#fff;will-change:transform,opacity,filter}
+#cap1,#cap2,#cap3{top:150px;font-size:58px}
+#cap3 em{font-style:normal;background:linear-gradient(90deg,#9fc0ff,#fff);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ---------- sky world ---------- */
+#monument{position:absolute;left:1030px;top:380px;width:1000px;height:760px}
+.spaced{position:absolute;left:0;right:0;text-align:center;font-weight:400;letter-spacing:.42em;text-indent:.42em;font-size:34px;color:#fff;text-shadow:0 2px 30px rgba(20,50,140,.35)}
+.spaced span{display:inline-block}
+#stage3tx{top:330px}
+#lockup{position:absolute;left:0;right:0;top:330px;display:flex;flex-direction:column;align-items:center}
+#lockup::before,#end::before{content:"";position:absolute;left:50%;top:50%;width:1500px;height:620px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(240,246,255,.7),rgba(240,246,255,0));z-index:-1}
+.lockrow{display:flex;align-items:center;gap:56px}
+.word{font-size:78px;font-weight:400;letter-spacing:.62em;margin-right:-.62em;color:var(--slate)}
+.sub{margin-top:52px;font-size:24px;letter-spacing:.62em;margin-right:-.62em;color:#12203f;font-weight:400}
+
+/* ---------- light UI scenes ---------- */
+.light{background:radial-gradient(1400px 900px at 85% 10%,#dbe8ff 0%,rgba(219,232,255,0) 60%),linear-gradient(180deg,#F6F9FF 0%,#E6F0FF 100%)}
+.arcs{position:absolute;inset:0;overflow:hidden}
+.arcs i{position:absolute;border-radius:50%;border:1px solid rgba(107,158,255,.18)}
+.label{position:absolute;left:160px;top:250px;font-size:17px;font-weight:600;letter-spacing:.32em;color:var(--deep)}
+.h1{position:absolute;left:156px;top:300px;font-size:84px;line-height:1.02;font-weight:600;letter-spacing:-.045em;color:var(--slate)}
+.para{position:absolute;left:160px;font-size:27px;line-height:1.45;color:#4a5670;width:620px;letter-spacing:-.01em}
+.big{position:absolute;left:156px;top:640px}
+.big .num{font-size:170px;font-weight:600;letter-spacing:-.06em;line-height:1;background:linear-gradient(135deg,#6B9EFF,#2E5BFF 60%,#1c3fd0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.big .cap2{font-size:26px;color:#4a5670;margin-top:14px;width:560px;line-height:1.4}
+.card{position:absolute;background:rgba(255,255,255,.78);border:1px solid rgba(15,23,42,.06);border-radius:26px;box-shadow:0 30px 80px rgba(46,91,255,.12),0 2px 6px rgba(15,23,42,.04)}
+.dark{background:#0F172A;border-radius:26px;box-shadow:0 40px 90px rgba(15,23,42,.35)}
+#cli{position:absolute;left:980px;top:270px;width:780px;height:470px}
+#cli .inner{padding:40px 46px;font-family:JBM,monospace;font-size:26px;line-height:1.9;color:#dbe6ff}
+#cli .lbl{font-family:Inter;font-size:15px;letter-spacing:.2em;color:#6d7a96;margin-bottom:10px}
+.ok{color:#5fd49a}
+.cli-row{white-space:pre}
+.cli-row .dim2{color:#6d7a96}
+#surfaces{position:absolute;left:980px;top:170px;width:780px}
+.surf{position:relative;height:104px;margin-bottom:18px;border-radius:20px;overflow:hidden;display:flex;align-items:center;padding:0 28px;box-sizing:border-box;box-shadow:0 18px 50px rgba(46,91,255,.12)}
+.surf .name{position:absolute;left:28px;top:14px;font-size:14px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
+.surf .line{margin-top:26px;font-size:21px;white-space:pre;display:flex;align-items:center;gap:12px}
+.s-term{background:#0F172A;color:#dbe6ff}.s-term .name{color:#6d7a96}.s-term .line{font-family:JBM,monospace}
+.s-vsc{background:#fff;color:#0F172A}.s-vsc .name{color:#7a869f}
+.s-vsc .sbar{position:absolute;left:0;right:0;bottom:0;height:40px;background:#2E5BFF;color:#fff;font-size:17px;display:flex;align-items:center;padding:0 20px;gap:28px;font-family:Inter}
+.s-chat{background:#fff;color:#0F172A}.s-chat .name{color:#7a869f}
+.foot{font-size:18px;color:#2E5BFF;border-top:1px dashed rgba(46,91,255,.35);padding-top:6px}
+.chip{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:rgba(107,158,255,.18);color:#2E5BFF}
+.s-term .chip{background:rgba(107,158,255,.2);color:#9fc0ff}
+
+#composer{position:absolute;left:980px;top:230px;width:780px;height:600px}
+#composer .inner{padding:40px 46px}
+.fl{font-size:14px;font-weight:600;letter-spacing:.2em;color:#7a869f;margin:0 0 10px}
+.field{border:1px solid rgba(15,23,42,.1);border-radius:14px;background:#fff;padding:16px 20px;font-size:27px;height:36px;margin-bottom:26px;white-space:pre;color:#0F172A}
+.field.body2{font-size:23px;color:#4a5670}
+.tags{display:flex;gap:12px;margin-bottom:30px;height:40px}
+.tag{padding:8px 18px;border-radius:999px;background:#E6F0FF;color:#2E5BFF;font-size:19px;font-weight:500}
+.buyrow{display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(15,23,42,.08);padding-top:28px}
+.buyrow .meta{font-size:19px;color:#4a5670}
+.buyrow .meta b{color:#0F172A}
+.btn{padding:18px 30px;border-radius:999px;background:#0F172A;color:#fff;font-size:21px;font-weight:600}
+#globeWrap{position:absolute;left:900px;top:150px;width:860px;height:560px}
+#stats{position:absolute;left:980px;top:740px;width:780px;display:flex;gap:20px}
+#stats .card{position:relative}
+.stat{flex:1;height:150px;padding:22px 26px;box-sizing:border-box}
+.stat .k{font-size:15px;font-weight:500;color:#7a869f}
+.stat .v{font-size:52px;font-weight:500;letter-spacing:-.03em;margin-top:10px;font-variant-numeric:tabular-nums;color:#0F172A}
+.stat .d{font-size:15px;color:#22a06b;margin-top:4px}
+
+/* ---------- end card ---------- */
+#s6tx{top:330px}
+#end{position:absolute;left:0;right:0;top:250px;display:flex;flex-direction:column;align-items:center}
+#end .tag2{font-size:64px;font-weight:600;letter-spacing:-.04em;color:var(--slate);margin-top:70px}
+#end .install{margin-top:48px;display:flex;align-items:center;gap:22px;background:#0F172A;color:#fff;padding:24px 34px;border-radius:18px;box-shadow:0 30px 70px rgba(15,23,42,.35)}
+#end .install .p{color:#6B9EFF;font-family:JBM,monospace;font-size:26px}
+#end .install .c{font-family:JBM,monospace;font-size:28px}
+#end .install .l{font-size:12px;color:#7a869f;letter-spacing:.12em;display:block;margin-bottom:4px;font-family:Inter}
+#end .url{margin-top:40px;font-size:22px;letter-spacing:.3em;color:#12203f;font-weight:500}
+#flash{background:#fff;pointer-events:none}
+#vign{background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.55) 100%);pointer-events:none}
+#grain{mix-blend-mode:overlay;opacity:.045;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- sky world (acts 3 & 6) -->
+  <canvas id="sky" class="layer" width="1920" height="1080"></canvas>
+  <svg id="monument" viewBox="0 0 1000 760">
+    <defs>
+      <linearGradient id="legL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c9d3e3"/><stop offset=".55" stop-color="#f4f7fc"/><stop offset="1" stop-color="#aebbd0"/></linearGradient>
+      <linearGradient id="legR" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9eabc2"/><stop offset=".5" stop-color="#e9eef6"/><stop offset="1" stop-color="#c2ccdc"/></linearGradient>
+      <linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e9f2"/><stop offset=".25" stop-color="#b9c4d6"/><stop offset="1" stop-color="#7f8ca4"/></linearGradient>
+    </defs>
+    <g id="legs">
+      <path d="M455 70 L505 70 C492 260 452 420 360 560 L250 560 C360 420 432 270 455 70 Z" fill="url(#legL)"/>
+      <path d="M515 70 L565 70 C590 270 650 420 770 560 L660 560 C570 420 526 260 515 70 Z" fill="url(#legR)"/>
+    </g>
+    <path d="M-40 575 C 200 530 700 520 1040 560 L1040 760 L-40 760 Z" fill="url(#base)"/>
+    <path d="M-40 575 C 200 530 700 520 1040 560" fill="none" stroke="#f4f7fc" stroke-width="3" opacity=".8"/>
+  </svg>
+  <canvas id="curtains" class="layer" width="1920" height="1080"></canvas>
+  <div id="stage3tx" class="spaced"></div>
+  <div id="lockup">
+    <div class="lockrow">
+      <svg width="150" height="120" viewBox="0 0 100 80"><path fill="#0F172A" d="M34 0 L49 0 C44 30 38 56 30 80 L2 80 C14 54 26 28 34 0 Z"/><path fill="#0F172A" d="M53 0 L66 0 C74 28 86 54 98 80 L72 80 C64 56 58 30 53 0 Z"/></svg>
+      <div class="word">LATENT</div>
+    </div>
+    <div class="sub">THE AD MARKETPLACE FOR AI AGENTS</div>
+  </div>
+  <div id="s6tx" class="spaced"></div>
+  <div id="end">
+    <div class="lockrow">
+      <svg width="120" height="96" viewBox="0 0 100 80"><path fill="#0F172A" d="M34 0 L49 0 C44 30 38 56 30 80 L2 80 C14 54 26 28 34 0 Z"/><path fill="#0F172A" d="M53 0 L66 0 C74 28 86 54 98 80 L72 80 C64 56 58 30 53 0 Z"/></svg>
+      <div class="word" style="font-size:62px">LATENT</div>
+    </div>
+    <div class="tag2">Agents deserve a bigger stage.</div>
+    <div class="install"><span class="p">&gt;_</span><span><span class="l">INSTALL</span><span class="c">npx latent-protocol@beta init</span></span></div>
+    <div class="url">LATENTMARKET.XYZ &nbsp;·&nbsp; PUBLIC BETA — LIVE NOW</div>
+  </div>
+
+  <!-- acts 1 & 2: terminal on black -->
+  <div id="dark" class="layer" style="background:radial-gradient(1200px 700px at 50% 55%,#0b1326 0%,#04060c 70%)"></div>
+  <div id="cam1" class="layer">
+    <div class="win" id="term">
+      <div class="bar"><i></i><i></i><i></i><span>~/acme-app — agent</span>
+        <div id="pill"><span class="sym" style="color:#6B9EFF">◆</span> latent <b id="bal">0.0000</b> USDC</div>
+      </div>
+      <div class="body">
+        <div class="dim">Working in ~/acme-app · 3 files changed</div>
+        <div><span class="chev">›</span><span id="typed"></span><span id="cur" class="cursor"></span></div>
+        <div id="think" class="think"><span id="spin" class="sym">✻</span> <span id="thinkTxt" class="shimmer">Refactoring…</span> <span id="thinkT" class="dim">(1s · esc to interrupt)</span></div>
+        <div class="rule"></div>
+        <div id="status">
+          <div id="statusIdle" class="dim">main · ~/acme-app · ctx 42%</div>
+          <div id="statusAd"><span class="adtag">Sponsored</span><span class="adtxt">Nimbus CI — ship 3× faster with zero-config pipelines</span><span class="adcta">Try free <span class="sym">→</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div id="floatUp">+0.0025 USDC</div>
+  </div>
+  <div id="cap1" class="cap">Your agent is thinking.</div>
+  <div id="cap2" class="cap">And you’re… waiting.</div>
+  <div id="cap3" class="cap">What if the wait was <em>worth something?</em></div>
+
+  <!-- act 4: developers -->
+  <div id="s4" class="layer light">
+    <div class="arcs"><i style="left:-900px;top:-600px;width:2400px;height:2400px"></i><i style="left:-700px;top:-420px;width:2000px;height:2000px"></i><i style="left:-500px;top:-240px;width:1600px;height:1600px"></i></div>
+    <div class="label" id="s4l">FOR DEVELOPERS</div>
+    <div class="h1" id="s4h">One command.<br>Every agent.</div>
+    <div class="para" id="s4p" style="top:530px">A single sponsored line, only in idle space. Never inside your agent’s answers.</div>
+    <div class="big" id="s4big" style="top:690px"><div class="num">50%</div><div class="cap2">of the ad revenue is yours, paid in USDC on Base.</div></div>
+    <div id="cli" class="dark"><div class="inner">
+      <div class="lbl">TERMINAL</div>
+      <div class="cli-row"><span style="color:#6B9EFF">$</span> <span id="cliTyped"></span><span id="cliCur" class="cursor" style="height:28px"></span></div>
+      <div id="cliRows"></div>
+    </div></div>
+    <div id="surfaces"></div>
+  </div>
+
+  <!-- act 5: advertisers -->
+  <div id="s5" class="layer light">
+    <div class="arcs"><i style="left:900px;top:-800px;width:2400px;height:2400px"></i><i style="left:1100px;top:-600px;width:2000px;height:2000px"></i></div>
+    <div class="label" id="s5l">FOR ADVERTISERS</div>
+    <div class="h1" id="s5h">Write one line.<br>Reach every agent.</div>
+    <div class="para" id="s5p" style="top:530px">Matched to what agents are actually working on. Pay only for confirmed impressions.</div>
+    <div class="big" id="s5big" style="top:690px"><div class="num">$10</div><div class="cap2">is all it takes to launch a campaign.</div></div>
+    <div id="composer" class="card"><div class="inner">
+      <div class="fl">HEADLINE</div><div class="field" id="fTitle"></div>
+      <div class="fl">BODY</div><div class="field body2" id="fBody"></div>
+      <div class="fl">CONTEXT TAGS</div>
+      <div class="tags"><span class="tag" id="tg0">developer</span><span class="tag" id="tg1">ai</span><span class="tag" id="tg2">devtools</span></div>
+      <div class="buyrow"><div class="meta"><b>10 blocks</b> · 10,000 impressions · <b>$50 USDC</b></div><div class="btn" id="launch">Launch campaign</div></div>
+    </div></div>
+    <canvas id="globe" width="860" height="560" style="position:absolute;left:940px;top:150px"></canvas>
+    <div id="stats">
+      <div class="card stat" id="st0"><div class="k">Impressions</div><div class="v" id="v0">0</div><div class="d">▲ live</div></div>
+      <div class="card stat" id="st1"><div class="k">Clicks</div><div class="v" id="v1">0</div><div class="d">▲ live</div></div>
+      <div class="card stat" id="st2"><div class="k">CTR</div><div class="v" id="v2">0.0%</div><div class="d">▲ live</div></div>
+    </div>
+  </div>
+
+  <div id="flash" class="layer"></div>
+  <div id="vign" class="layer"></div>
+  <canvas id="grain" class="layer" width="480" height="270"></canvas>
+</div>
+
+<script>
+const W = 1920, H = 1080;
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const k = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, x) => a + (b - a) * x;
+const eo = x => 1 - Math.pow(1 - x, 3);
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eox = x => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+// in over [a,b], optionally out over [c,d]
+const fade = (t, a, b, c, d) => c == null ? eo(k(t, a, b)) : Math.min(eo(k(t, a, b)), 1 - eio(k(t, c, d)));
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function show(el, o, tf = '', blur = 0) {
+  el.style.opacity = o.toFixed(4);
+  el.style.visibility = o <= 0.001 ? 'hidden' : 'visible';
+  el.style.transform = tf;
+  el.style.filter = blur > 0.05 ? `blur(${blur.toFixed(2)}px)` : 'none';
+}
+// caption: fade/rise in, fade/blur out
+function cap(el, t, a, b, c, d) {
+  const i = eo(k(t, a, b)), o = eio(k(t, c, d));
+  show(el, Math.min(i, 1 - o), `translateY(${((1 - i) * 24 - o * 14).toFixed(1)}px)`, (1 - i) * 12 + o * 10);
+}
+
+/* ---------------- timeline (seconds) ---------------- */
+const T = {
+  type1: 0.45, cps1: 32, prompt: 'refactor the auth module and add tests', think: 1.75,
+  turn: 4.2, reveal: 7.6, dev: 12.2, cliType: 12.75, cps2: 26, cliCmd: 'npx latent-protocol@beta init',
+  checks: 14.15, surf: 15.55, adv: 18.4, title: 18.95, body: 19.75, launch: 21.3, globe: 21.55,
+  close: 24.4, end: 27.1, dur: 30
+};
+
+/* ---------------- sky ---------------- */
+const skyC = $('sky'), sctx = skyC.getContext('2d');
+const oc = document.createElement('canvas'); oc.width = W / 2; oc.height = H / 2; const octx = oc.getContext('2d');
+const clouds = (() => {
+  const r = mulberry32(11), out = [];
+  const add = (n, y0, y1, s0, s1, a0) => {
+    for (let i = 0; i < n; i++) {
+      const s = s0 + r() * (s1 - s0);
+      const c = { x: r() * 2800 - 500, y: y0 + r() * (y1 - y0), sp: 6 + r() * 12, p: [] };
+      const m = 12 + Math.floor(r() * 10);
+      for (let j = 0; j < m; j++) {
+        const dx = (r() - .5) * 380 * s, hump = 1 - Math.abs(dx) / (220 * s);
+        c.p.push({ dx, dy: -Math.max(0, hump) * r() * 120 * s, r: (28 + r() * 55) * s * (.6 + .5 * Math.max(0, hump)), a: a0 + r() * .15 });
+      }
+      c.p.sort((p, q) => q.dy - p.dy);
+      out.push(c);
+    }
+  };
+  add(9, 470, 560, .45, .8, .8);    // mid-sky puffs
+  add(16, 640, 860, .8, 1.5, .85);  // main bank
+  add(12, 880, 1120, 1.3, 2.0, .9); // horizon
+  for (let i = 0; i < 6; i++) out.push({ x: r() * 2400 - 300, y: 70 + r() * 220, sp: 14 + r() * 8, wisp: true, p: Array.from({ length: 5 }, () => ({ dx: (r() - .5) * 700, dy: (r() - .5) * 40, r: 60 + r() * 80, a: .1 + r() * .1 })) });
+  return out;
+})();
+function drawSky(t, zoom) {
+  const g = sctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#2553D8'); g.addColorStop(.45, '#4F85EE'); g.addColorStop(.8, '#8FB7F6'); g.addColorStop(1, '#C9DDFB');
+  sctx.fillStyle = g; sctx.fillRect(0, 0, W, H);
+  const sun = sctx.createRadialGradient(1540, 90, 0, 1540, 90, 1000);
+  sun.addColorStop(0, 'rgba(255,255,255,.42)'); sun.addColorStop(1, 'rgba(255,255,255,0)');
+  sctx.fillStyle = sun; sctx.fillRect(0, 0, W, H);
+  octx.clearRect(0, 0, oc.width, oc.height);
+  octx.save(); octx.scale(.5, .5); octx.translate(W / 2, H / 2); octx.scale(zoom, zoom); octx.translate(-W / 2, -H / 2);
+  for (const c of clouds) {
+    const cx = c.x + t * c.sp;
+    for (const p of c.p) {
+      const x = cx + p.dx, y = c.y + p.dy;
+      if (c.wisp) {
+        const rg = octx.createRadialGradient(x, y, 0, x, y, p.r);
+        rg.addColorStop(0, `rgba(255,255,255,${p.a})`); rg.addColorStop(1, 'rgba(255,255,255,0)');
+        octx.fillStyle = rg; octx.beginPath(); octx.ellipse(x, y, p.r * 3, p.r * .45, 0, 0, 7); octx.fill();
+        continue;
+      }
+      // shadowed underside, then lit body, then highlight
+      let rg = octx.createRadialGradient(x, y + p.r * .28, 0, x, y + p.r * .28, p.r * 1.05);
+      rg.addColorStop(0, `rgba(135,165,215,${p.a * .32})`); rg.addColorStop(1, 'rgba(150,178,222,0)');
+      octx.fillStyle = rg; octx.beginPath(); octx.arc(x, y + p.r * .28, p.r * 1.05, 0, 7); octx.fill();
+      rg = octx.createRadialGradient(x, y - p.r * .12, 0, x, y - p.r * .12, p.r);
+      rg.addColorStop(0, `rgba(255,255,255,${p.a})`); rg.addColorStop(.45, `rgba(248,251,255,${p.a * .75})`); rg.addColorStop(1, 'rgba(240,246,255,0)');
+      octx.fillStyle = rg; octx.beginPath(); octx.arc(x, y - p.r * .12, p.r, 0, 7); octx.fill();
+    }
+  }
+  octx.restore();
+  sctx.filter = 'blur(1.5px)'; sctx.drawImage(oc, 0, 0, W, H); sctx.filter = 'none';
+}
+
+/* ---------------- curtains ---------------- */
+const curC = $('curtains'), cctx = curC.getContext('2d');
+function drawCurtains(t, open) {
+  cctx.clearRect(0, 0, W, H);
+  const base = lerp(880, 430, open);
+  const folds = 12;
+  for (const side of [-1, 1]) {
+    const X = x => side < 0 ? x : W - x;
+    const edge = (y, u, f) => {
+      const yy = y / H;
+      const w = base * (1 - .5 * Math.pow(yy, 1.5));
+      const amp = (10 + 34 * yy) * (.3 + u);
+      return u * w + Math.sin(y * .0042 + f * 1.25 + t * .9 * side) * amp + Math.sin(y * .011 + f * 2.1 - t * .6) * 6 * u;
+    };
+    cctx.fillStyle = 'rgba(232,241,255,.22)';
+    cctx.beginPath(); cctx.moveTo(X(0), 0);
+    for (let y = 0; y <= H + 20; y += 20) cctx.lineTo(X(edge(y, 1, folds)), y);
+    cctx.lineTo(X(0), H + 20); cctx.closePath(); cctx.fill();
+    for (let f = 0; f < folds; f++) {
+      const u0 = f / folds, u1 = (f + 1) / folds;
+      const gx0 = X(edge(H * .4, u0, f)), gx1 = X(edge(H * .4, u1, f + 1));
+      const g = cctx.createLinearGradient(gx0, 0, gx1, 0);
+      const hi = .34 + .3 * Math.pow(u1, 1.4);
+      g.addColorStop(0, 'rgba(255,255,255,0.03)'); g.addColorStop(.55, `rgba(255,255,255,${hi})`); g.addColorStop(1, 'rgba(210,225,250,0.08)');
+      cctx.fillStyle = g; cctx.beginPath();
+      for (let y = 0; y <= H + 20; y += 20) { const x = X(edge(y, u0, f)); y ? cctx.lineTo(x, y) : cctx.moveTo(x, y); }
+      for (let y = H + 20; y >= 0; y -= 20) cctx.lineTo(X(edge(y, u1, f + 1)), y);
+      cctx.closePath(); cctx.fill();
+    }
+    // bright inner hem
+    cctx.strokeStyle = 'rgba(255,255,255,.55)'; cctx.lineWidth = 3; cctx.beginPath();
+    for (let y = 0; y <= H + 20; y += 20) { const x = X(edge(y, 1, folds)); y ? cctx.lineTo(x, y) : cctx.moveTo(x, y); }
+    cctx.stroke();
+  }
+}
+
+/* ---------------- spaced text ---------------- */
+function spaced(el, text) { el.innerHTML = [...text].map(ch => `<span>${ch === ' ' ? '&nbsp;' : ch}</span>`).join(''); return [...el.children]; }
+const s3letters = spaced($('stage3tx'), 'AGENTS DESERVE A BIGGER STAGE.');
+const s6letters = spaced($('s6tx'), 'REAL AGENTS.  REAL ATTENTION.');
+function letters(list, t, a, step, outA, outB) {
+  list.forEach((s, i) => {
+    const x = eo(k(t, a + i * step, a + i * step + .55));
+    const o = outA == null ? 0 : eio(k(t, outA, outB));
+    s.style.opacity = (x * (1 - o)).toFixed(3);
+    s.style.filter = `blur(${((1 - x) * 8 + o * 8).toFixed(1)}px)`;
+    s.style.transform = `translateY(${((1 - x) * 10).toFixed(1)}px)`;
+  });
+}
+
+/* ---------------- act 4 content ---------------- */
+const checks = [['Claude Code', 'status line + thinking line'], ['Cursor / VS Code', 'status bar'], ['Grok Build', 'status line'], ['OpenClaw', 'reply footer'], ['Hermes', 'desktop status bar'], ['Wallet', 'ready on Base']];
+$('cliRows').innerHTML = checks.map((c, i) => `<div class="cli-row" id="ck${i}"><span class="ok sym">✓</span> ${c[0].padEnd(17, ' ')}<span class="dim2">${c[1]}</span></div>`).join('');
+const AD = 'Nimbus CI — ship 3× faster';
+const surfaces = [
+  ['s-term', 'Claude Code', `<span class="chip">Sponsored</span>${AD} <span class="sym">→</span>`],
+  ['s-vsc', 'Cursor · VS Code', ``, `<span>⎇ main</span><span class="sym">◆</span><span>${AD} · Try free</span>`],
+  ['s-term', 'Grok Build', `<span class="chip">Sponsored</span>${AD} <span class="sym">→</span>`],
+  ['s-chat', 'OpenClaw', `<span class="foot"><span class="sym">◆</span> Sponsored · ${AD} — Try free</span>`],
+  ['s-chat', 'Telegram', `<span class="foot"><span class="sym">◆</span> Sponsored · ${AD} — Try free</span>`],
+  ['s-term', 'Hermes Desktop', `<span class="chip">Sponsored</span>${AD} <span class="sym">→</span>`],
+];
+$('surfaces').innerHTML = surfaces.map((s, i) => `<div class="surf ${s[0]}" id="sf${i}"><div class="name">${s[1]}</div><div class="line">${s[2]}</div>${s[3] ? `<div class="sbar">${s[3]}</div>` : ''}</div>`).join('');
+
+/* ---------------- globe ---------------- */
+const gC = $('globe'), gctx = gC.getContext('2d');
+const gpts = (() => {
+  const r = mulberry32(5), pts = [];
+  const N = 1500;
+  for (let i = 0; i < N; i++) {
+    const y = 1 - (i / (N - 1)) * 2, rad = Math.sqrt(1 - y * y), th = i * 2.399963;
+    pts.push({ x: Math.cos(th) * rad, y, z: Math.sin(th) * rad, lit: r(), ph: r() * 6 });
+  }
+  return pts;
+})();
+function drawGlobe(t, lit) {
+  gctx.clearRect(0, 0, 860, 560);
+  const cx = 430, cy = 285, R = 250, rot = t * .35;
+  const halo = gctx.createRadialGradient(cx, cy, R * .6, cx, cy, R * 1.25);
+  halo.addColorStop(0, 'rgba(107,158,255,.10)'); halo.addColorStop(1, 'rgba(107,158,255,0)');
+  gctx.fillStyle = halo; gctx.fillRect(0, 0, 860, 560);
+  for (const p of gpts) {
+    const x = p.x * Math.cos(rot) + p.z * Math.sin(rot), z = -p.x * Math.sin(rot) + p.z * Math.cos(rot);
+    const tilt = .35, y = p.y * Math.cos(tilt) - z * Math.sin(tilt), zz = p.y * Math.sin(tilt) + z * Math.cos(tilt);
+    if (zz < -.15) continue;
+    const px = cx + x * R, py = cy + y * R, depth = (zz + 1) / 2;
+    const on = p.lit < lit;
+    if (on) {
+      const pulse = .5 + .5 * Math.sin(t * 5 + p.ph);
+      gctx.fillStyle = `rgba(46,91,255,${.10 * depth * pulse})`;
+      gctx.beginPath(); gctx.arc(px, py, 10 + 6 * pulse, 0, 7); gctx.fill();
+      gctx.fillStyle = `rgba(46,91,255,${.55 + .45 * depth})`;
+      gctx.beginPath(); gctx.arc(px, py, 3.4, 0, 7); gctx.fill();
+    } else {
+      gctx.fillStyle = `rgba(15,23,42,${.05 + .16 * depth})`;
+      gctx.beginPath(); gctx.arc(px, py, 1.8, 0, 7); gctx.fill();
+    }
+  }
+}
+
+/* ---------------- grain ---------------- */
+const grC = $('grain'), grx = grC.getContext('2d');
+const grainFrames = Array.from({ length: 6 }, (_, f) => {
+  const img = grx.createImageData(480, 270), r = mulberry32(100 + f);
+  for (let i = 0; i < img.data.length; i += 4) { const v = r() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  return img;
+});
+
+const typed = (str, t, a, cps) => str.slice(0, clamp(Math.floor((t - a) * cps), 0, str.length));
+const fmt = n => Math.round(n).toLocaleString('en-US');
+
+/* ================= render(t) ================= */
+function render(t) {
+  // ---------- ACT 1 + 2: terminal ----------
+  const darkO = 1 - eio(k(t, T.reveal + .2, T.reveal + 1.3));
+  show($('dark'), darkO);
+  const pull = eio(k(t, T.reveal, T.reveal + 1.6));
+  const push = lerp(.94, 1.03, eo(k(t, 0, T.reveal)));
+  const camS = push * lerp(1, .2, pull);
+  show($('cam1'), 1 - eo(k(t, T.reveal + .7, T.reveal + 1.6)), `translateY(${(pull * -40).toFixed(1)}px) scale(${camS.toFixed(4)})`, pull * 6);
+  show($('term'), fade(t, .05, .6));
+
+  const typing = t >= T.type1 && t < T.think - .05;
+  $('typed').textContent = typed(T.prompt, t, T.type1, T.cps1);
+  const blink = typing || Math.floor(t * 2.2) % 2 === 0;
+  $('cur').style.visibility = t < T.think - .05 && blink ? 'visible' : 'hidden';
+  const thinkO = fade(t, T.think, T.think + .25);
+  $('think').style.opacity = thinkO;
+  const secs = t < T.turn ? 1 + Math.floor(k(t, T.think, T.turn) * 13) : 14 + Math.floor((t - T.turn) * .9);
+  $('thinkT').textContent = `(${secs}s · esc to interrupt)`;
+  const glyphs = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
+  $('spin').textContent = glyphs[Math.floor(t / .11) % glyphs.length];
+  $('thinkTxt').style.backgroundPosition = `${(100 - ((t * 55) % 100)).toFixed(1)}% 0`;
+  // status line turns into the sponsored line
+  const turn = eo(k(t, T.turn, T.turn + .55));
+  show($('statusIdle'), 1 - eo(k(t, T.turn - .1, T.turn + .3)), `translateY(${(-turn * 10).toFixed(1)}px)`, k(t, T.turn - .1, T.turn + .3) * 8);
+  show($('statusAd'), turn, `translateY(${((1 - turn) * 14).toFixed(1)}px)`, (1 - turn) * 10);
+  $('statusAd').querySelector('.adtxt').style.backgroundPosition = `${(100 - ((t - T.turn) * 40 % 100)).toFixed(1)}% 0`;
+  const glow = Math.max(0, 1 - Math.abs(t - T.turn - .45) / .9);
+  $('term').style.boxShadow = `0 0 0 1px rgba(148,178,255,${(.14 + glow * .4).toFixed(3)}),0 40px 120px rgba(0,0,0,.6),0 0 ${(160 + glow * 120).toFixed(0)}px rgba(46,91,255,${(.08 + glow * .3).toFixed(3)})`;
+  // balance + floating reward
+  const earn = t < T.turn + .8 ? 0 : t < 6.3 ? .0025 : .005;
+  $('bal').textContent = earn.toFixed(4);
+  const pillPop = eo(k(t, T.turn + .7, T.turn + 1.0));
+  $('pill').style.opacity = fade(t, .4, 1);
+  $('pill').style.transform = `scale(${(1 + .12 * Math.sin(pillPop * Math.PI)).toFixed(3)})`;
+  const fl = k(t, T.turn + .75, T.turn + 2.2);
+  show($('floatUp'), fl > 0 ? Math.sin(fl * Math.PI) : 0, `translateY(${(-fl * 70).toFixed(1)}px)`);
+  cap($('cap1'), t, 1.95, 2.4, 2.95, 3.25);
+  cap($('cap2'), t, 3.2, 3.6, 4.05, 4.3);
+  cap($('cap3'), t, 5.05, 5.6, 7.2, 7.7);
+
+  // ---------- sky world: act 3 + act 6 ----------
+  const skyVis = t >= T.reveal - .1;
+  const z3 = lerp(1.35, 1, eo(k(t, T.reveal, T.dev)));
+  const z6 = lerp(1.18, 1.02, eo(k(t, T.close, T.dur)));
+  const inClose = t >= T.close - .2;
+  if (skyVis) { drawSky(t, inClose ? z6 : z3); }
+  skyC.style.visibility = skyVis ? 'visible' : 'hidden';
+  const open = inClose ? eio(k(t, T.close - .1, T.close + 2.4)) : eio(k(t, T.reveal + .2, T.reveal + 3.2));
+  if (skyVis) drawCurtains(t, open);
+  curC.style.visibility = skyVis ? 'visible' : 'hidden';
+  // monument rises
+  const mRise = inClose ? eo(k(t, T.close, T.close + 2.2)) : eo(k(t, 10.2, 12.0));
+  const mx = inClose ? -60 : 0;
+  show($('monument'), skyVis ? Math.min(1, mRise * 1.4) : 0, `translate(${mx}px,${((1 - mRise) * 260).toFixed(1)}px)`);
+  // act 3 text
+  $('stage3tx').style.visibility = t > 8.5 && t < 11 ? 'visible' : 'hidden';
+  letters(s3letters, t, 8.75, .035, 10.25, 10.75);
+  const lk = eo(k(t, 10.55, 11.35));
+  show($('lockup'), t < T.close ? Math.min(lk, 1 - eio(k(t, 11.9, 12.3))) : 0, `translateY(${((1 - lk) * 20).toFixed(1)}px) scale(${lerp(1.04, 1, lk).toFixed(4)})`, (1 - lk) * 10);
+  // act 6 text + end card
+  $('s6tx').style.visibility = t > 24.8 && t < 27.4 ? 'visible' : 'hidden';
+  letters(s6letters, t, 25.05, .03, 26.75, 27.25);
+  const en = eo(k(t, T.end, T.end + .9));
+  show($('end'), en, `translateY(${((1 - en) * 26).toFixed(1)}px)`, (1 - en) * 12);
+
+  // ---------- act 4: developers ----------
+  const s4in = eo(k(t, T.dev, T.dev + .6)), s4out = eio(k(t, T.adv + .15, T.adv + .55));
+  show($('s4'), Math.min(s4in, 1 - s4out), `translateX(${(-s4out * 120).toFixed(1)}px)`);
+  if (t > T.dev - .1 && t < T.adv + .6) {
+    const e = (a, d = .6) => eo(k(t, a, a + d));
+    show($('s4l'), e(T.dev + .15), `translateY(${((1 - e(T.dev + .15)) * 16).toFixed(1)}px)`);
+    show($('s4h'), e(T.dev + .25, .8), `translateY(${((1 - e(T.dev + .25, .8)) * 30).toFixed(1)}px)`, (1 - e(T.dev + .25, .8)) * 8);
+    show($('s4p'), e(T.dev + .55), `translateY(${((1 - e(T.dev + .55)) * 20).toFixed(1)}px)`);
+    const bg = e(T.surf + .5, .8);
+    show($('s4big'), bg, `translateY(${((1 - bg) * 30).toFixed(1)}px)`, (1 - bg) * 10);
+    // CLI card, then surfaces
+    const cliIn = e(T.dev + .3, .7), cliOut = eio(k(t, T.surf - .25, T.surf + .2));
+    show($('cli'), Math.min(cliIn, 1 - cliOut), `translateY(${((1 - cliIn) * 40 - cliOut * 60).toFixed(1)}px) scale(${lerp(1, .96, cliOut).toFixed(4)})`, cliOut * 8);
+    $('cliTyped').textContent = typed(T.cliCmd, t, T.cliType, T.cps2);
+    $('cliCur').style.visibility = t < 13.95 && (t < T.cliType + T.cliCmd.length / T.cps2 || Math.floor(t * 2.2) % 2 === 0) ? 'visible' : 'hidden';
+    checks.forEach((_, i) => { const x = e(T.checks + i * .2, .3); show($('ck' + i), x, `translateX(${((1 - x) * -14).toFixed(1)}px)`); });
+    surfaces.forEach((_, i) => { const x = e(T.surf + .1 + i * .17, .55); show($('sf' + i), x, `translateY(${((1 - x) * 40).toFixed(1)}px)`, (1 - x) * 6); });
+  }
+
+  // ---------- act 5: advertisers ----------
+  const s5in = eo(k(t, T.adv - .3, T.adv + .2)), s5out = eio(k(t, T.close - .3, T.close + .2));
+  show($('s5'), Math.min(s5in, 1 - s5out), `translateX(${((1 - s5in) * 120).toFixed(1)}px)`);
+  if (t > T.adv - .35 && t < T.close + .3) {
+    const e = (a, d = .6) => eo(k(t, a, a + d));
+    show($('s5l'), e(T.adv + .1), `translateY(${((1 - e(T.adv + .1)) * 16).toFixed(1)}px)`);
+    show($('s5h'), e(T.adv + .2, .8), `translateY(${((1 - e(T.adv + .2, .8)) * 30).toFixed(1)}px)`, (1 - e(T.adv + .2, .8)) * 8);
+    show($('s5p'), e(T.adv + .5), `translateY(${((1 - e(T.adv + .5)) * 20).toFixed(1)}px)`);
+    const bg = e(T.globe + .6, .8);
+    show($('s5big'), bg, `translateY(${((1 - bg) * 30).toFixed(1)}px)`, (1 - bg) * 10);
+    const cIn = e(T.adv + .25, .7), cOut = eio(k(t, T.globe - .2, T.globe + .25));
+    show($('composer'), Math.min(cIn, 1 - cOut), `translateY(${((1 - cIn) * 40 - cOut * 60).toFixed(1)}px) scale(${lerp(1, .96, cOut).toFixed(4)})`, cOut * 8);
+    $('fTitle').textContent = typed('Nimbus CI — ship 3× faster', t, T.title, 34);
+    $('fBody').textContent = typed('Zero-config pipelines for agent-built code.', t, T.body, 46);
+    [0, 1, 2].forEach(i => { const x = eox(k(t, 20.75 + i * .1, 21.05 + i * .1)); show($('tg' + i), x, `scale(${lerp(.6, 1, x).toFixed(3)})`); });
+    const press = Math.sin(k(t, T.launch, T.launch + .22) * Math.PI);
+    $('launch').style.transform = `scale(${(1 - press * .07).toFixed(3)})`;
+    $('launch').style.background = t > T.launch + .1 ? '#2E5BFF' : '#0F172A';
+    $('launch').textContent = t > T.launch + .1 ? 'Live ✓' : 'Launch campaign';
+    const gIn = e(T.globe, .8);
+    show(gC, gIn, `scale(${lerp(.9, 1, gIn).toFixed(4)})`);
+    if (gIn > 0) drawGlobe(t, .005 + .16 * eio(k(t, T.globe + .2, T.close - .4)));
+    const sp = eio(k(t, T.globe + .4, T.close - .5));
+    [0, 1, 2].forEach(i => { const x = e(T.globe + .3 + i * .12, .6); show($('st' + i), x, `translateY(${((1 - x) * 30).toFixed(1)}px)`); });
+    $('v0').textContent = fmt(2000 * sp);
+    $('v1').textContent = fmt(56 * sp);
+    $('v2').textContent = (2.8 * sp).toFixed(1) + '%';
+  }
+
+  // ---------- flashes, vignette, grain ----------
+  const fl1 = Math.max(0, 1 - Math.abs(t - T.dev) / .35) * .9;
+  const fl2 = Math.max(0, 1 - Math.abs(t - T.close) / .45) * .85;
+  const fl3 = eio(k(t, T.dur - .35, T.dur)) * 0; // hold end card
+  show($('flash'), Math.max(fl1, fl2, fl3));
+  $('vign').style.opacity = (t < T.reveal + 1.2 ? 1 : .25).toString();
+  grx.putImageData(grainFrames[Math.floor(t * 24) % grainFrames.length], 0, 0);
+}
+window.render = render;
+window.DUR = T.dur;
+
+// live preview when opened directly (?t=12.5 freezes on a time)
+const q = new URLSearchParams(location.search);
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); $('stage').style.transform = `scale(${s})`; }
+if (!q.has('capture')) {
+  addEventListener('resize', fit); fit();
+  document.fonts.ready.then(() => {
+    if (q.has('t')) render(parseFloat(q.get('t')));
+    else { const t0 = performance.now(); const loop = () => { render(((performance.now() - t0) / 1000) % T.dur); requestAnimationFrame(loop); }; loop(); }
+  });
+}
+</script>
+</body>
+</html>
