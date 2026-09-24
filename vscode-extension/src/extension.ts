@@ -13,7 +13,7 @@ import { classifyWorkspace, type Category } from "./classify.js";
 import { Loopback } from "./loopback.js";
 import { BLOCK_BUILD, buildBlock, MARK_START } from "./block.js";
 import { buildCursorBlock, CURSOR_BUILD } from "./cursor-block.js";
-import { fileStamp, findAgentBundles, isPatched, patch, restore, tailIncludes } from "./patcher.js";
+import { fileIncludes, fileStamp, findAgentBundles, isPatched, patch, restore } from "./patcher.js";
 import { refreshKillswitch, shouldServe } from "./health.js";
 import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 import { MIN_VIEW_MS, ViewabilityTracker, type MetricEvent } from "./metrics.js";
@@ -323,7 +323,7 @@ function reassertSurfaces(context: vscode.ExtensionContext): void {
       const stamp = fileStamp(b.bundlePath);
       const key = stamp ? `${stamp.mtimeMs}:${stamp.size}` : "";
       if (key && bundleQuiet.get(b.bundlePath) === key) continue;
-      if (isPatched(b.bundlePath) && tailIncludes(b.bundlePath, `LATENT_BUILD = "${BLOCK_BUILD}"`)) {
+      if (isPatched(b.bundlePath) && fileIncludes(b.bundlePath, `LATENT_BUILD = "${BLOCK_BUILD}"`)) {
         if (key) bundleQuiet.set(b.bundlePath, key);
         continue;
       }
