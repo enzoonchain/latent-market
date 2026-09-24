@@ -46,7 +46,7 @@ the host agent or corrupts the earnings ledger, and will not be merged.
    export ADS_SERVER=http://127.0.0.1:8899
    ```
 3. Model your work on the closest existing surface:
-   - config/hook file patching → [`cli/src/surfaces/codex.ts`](cli/src/surfaces/codex.ts)
+   - config/hook file patching → [`cli/src/surfaces/claude-code.ts`](cli/src/surfaces/claude-code.ts)
    - a plugin the host loads → [`openclaw-plugin/`](openclaw-plugin/)
    - a Python response wrapper → [`latent_protocol/adapters/telegram.py`](latent_protocol/adapters/telegram.py)
 4. Prove the failure paths, not just the happy one. Your adapter must be

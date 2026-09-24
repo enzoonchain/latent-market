@@ -24,7 +24,7 @@ If detection returns `mcp`, check for existing MCP config:
 ```bash
 cat ~/.claude/mcp.json 2>/dev/null || cat claude_desktop_config.json 2>/dev/null || echo "no_mcp_config"
 ```
-If `no_mcp_config` and no Claude Code / Codex / MiMo present, fall back to `cli` mode by running:
+If `no_mcp_config` and no Claude Code present, fall back to `cli` mode by running:
 ```bash
 export LATENT_PLATFORM=cli
 ```
@@ -142,7 +142,7 @@ If the API is unreachable, check internet connection and try again.
 ## What's next
 
 After setup, ads appear automatically:
-- **Hermes**: Response footer appears every 5 messages (configurable via `ADS_FREQUENCY`)
+- **Hermes**: sponsored line in the Hermes Desktop status bar (no chat footer)
 - **Telegram**: Wrap each bot reply with `adapter.wrap_response()`
 - **CLI**: Use `@adapter.inject` decorator or `adapter.wrap()`
 - **MCP**: Call `check_balance()` to see earnings, `request_payout()` to withdraw

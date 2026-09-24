@@ -72,7 +72,6 @@ test("the bundled CLI's `init` stages the runtime — asset paths survive bundli
   // missing" and patched nothing.
   const home = mkdtempSync(join(tmpdir(), "latent-init-"));
   mkdirSync(join(home, ".claude"), { recursive: true });
-  mkdirSync(join(home, ".codex"), { recursive: true });
 
   const out = execFileSync(
     process.execPath,
@@ -81,14 +80,12 @@ test("the bundled CLI's `init` stages the runtime — asset paths survive bundli
   );
   assert.doesNotMatch(out, /runtime bundle missing/, out);
 
-  for (const f of ["statusline.mjs", "hook.mjs", "codex-hook.mjs"]) {
+  for (const f of ["statusline.mjs", "hook.mjs"]) {
     assert.ok(existsSync(join(home, ".latent-protocol", "bin", f)), `${f} not staged`);
   }
   const settings = readFileSync(join(home, ".claude", "settings.json"), "utf8");
   assert.ok(!/\bnpx\b/.test(settings), "npx in settings.json");
   assert.match(settings, /hook\.mjs\\" turn-start --agent claude-code/);
-  const codex = readFileSync(join(home, ".codex", "hooks.json"), "utf8");
-  assert.ok(!/\bnpx\b/.test(codex), "npx in codex hooks.json");
 });
 
 test("`init` on closed stdin fails loudly instead of exiting 0 with no wallet", () => {

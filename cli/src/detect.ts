@@ -4,11 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadConfig, saveConfig } from "./config.js";
-import {
-  codexFamilyDetectionRows,
-  CODEX_AGENTS,
-  codexDetected,
-} from "./surfaces/codex.js";
+import { codexFamilyDetectionRows } from "./surfaces/codex.js";
 import { grokDetected, grokHome } from "./surfaces/grok.js";
 import { mimoConfigDir, mimoDetected } from "./surfaces/mimo.js";
 import { detectVscode } from "./scanners/vscode.js";
@@ -436,16 +432,11 @@ export function formatSurfaceMatrix(d: DetectedAgents): string {
 
   const lines = [
     "Surface coverage after install:",
-    `  • Hermes CLI / gateway (Telegram, Discord, …): ${d.hermes ? "plugin agent-ads" : "skipped"}`,
-    `  • Hermes Desktop (\`hermes desktop\`):          ${d.hermes ? "same agent-ads plugin + status-bar sponsored line" : "skipped"}`,
+    `  • Hermes Desktop (\`hermes desktop\`):          ${d.hermes ? "plugin agent-ads, status-bar sponsored line" : "skipped"}`,
     `  • Hermes WebUI (browser / Tailscale):         ${webui}`,
     `  • Claude Code:                                ${d.claudeCode ? "statusLine" : "skipped"}`,
     `  • Grok Build:                                 ${d.grok ? "status line (config.toml)" : "skipped"}`,
     `  • OpenClaw (WA/TG/Slack/…):                   ${d.openclaw ? "plugin latent-protocol" : "skipped"}`,
-    ...CODEX_AGENTS.filter(codexDetected).map(
-      (a) => `  • ${a.name.padEnd(11)} (turn hooks hooks.json):          installed on init`,
-    ),
-    `  • MiMo Code (native plugin):                  ${d.mimo ? "installed on init" : "skipped"}`,
     `  • Cursor / VS Code:                           ${d.vscode ? `extension (${d.vscodeEditor ?? "vscode"})` : "skipped"}`,
     "  • Standalone Telegram bots:                   manual wrap (see docs/PLUGIN.md)",
   ];

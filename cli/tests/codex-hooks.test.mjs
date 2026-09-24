@@ -1,9 +1,10 @@
 /**
- * Codex turn hooks:
- *   - official Codex event names only (UserPromptSubmit / Stop, never TurnStart)
- *   - a LOCAL `node <bundle>` command, never `npx` (the command runs every turn)
- *   - hooks.json edits are parse-guarded, backed up, and migrate legacy npx
- *   - the staged bundle actually runs
+ * Codex — removal only. Older releases wrote turn hooks into
+ * ~/.codex/hooks.json whose UserPromptSubmit returned the ad as model context;
+ * we no longer ship that. These tests pin the cleanup:
+ *   - `init` never writes Codex hooks, and strips ones an older release left
+ *   - uninstall keeps the user's own hooks and restores the pristine backup
+ *   - the hook runtime ignores `--agent codex`: no output, no ad request
  *
  * Run after `npm --prefix cli run build`:
  *   node --test cli/tests/codex-hooks.test.mjs
@@ -11,16 +12,16 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { createServer } from "node:http";
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const { readSettings } = await import("../dist/surfaces/json-settings.js");
+const dist = (...p) => join(dirname(fileURLToPath(import.meta.url)), "..", "dist", ...p);
 
-/** Fresh sandbox: $HOME + CODEX_HOME under a tmp dir. Returns the codex
- *  surface module (paths resolve lazily via env, so a fresh import per test
- *  keeps them isolated). */
+/** Fresh sandbox: $HOME + CODEX_HOME under a tmp dir. */
 async function sandbox() {
   const home = mkdtempSync(join(tmpdir(), "latent-codex-"));
   process.env.HOME = home;
@@ -34,134 +35,114 @@ async function sandbox() {
 
 const hooksFile = (home, rel) => join(home, rel, "hooks.json");
 
-function runNode(script, args, input) {
-  return new Promise((resolve) => {
-    const p = spawn(process.execPath, [script, ...args], { stdio: ["pipe", "pipe", "pipe"] });
-    let out = "";
-    let err = "";
-    p.stdout.on("data", (d) => (out += d));
-    p.stderr.on("data", (d) => (err += d));
-    p.on("close", (code) => resolve({ code, out, err }));
-    p.stdin.end(input);
-  });
+/** What an older release wrote: our four events, staged local bundle. */
+function legacyHooks(home, extra = {}) {
+  const cmd = (ev) => `node "${join(home, ".latent-protocol", "bin", "codex-hook.mjs")}" ${ev} --agent codex`;
+  const group = (ev) => ({ hooks: [{ type: "command", command: cmd(ev), timeout: 10 }] });
+  return {
+    hooks: {
+      SessionStart: [group("session-start")],
+      UserPromptSubmit: [group("turn-start")],
+      Stop: [group("turn-end"), ...(extra.Stop ?? [])],
+      SessionEnd: [group("session-end")],
+    },
+  };
 }
 
-function startAdServer() {
-  const impressions = [];
-  const server = createServer((req, res) => {
-    let raw = "";
-    req.on("data", (c) => (raw += c));
-    req.on("end", () => {
-      if (req.url === "/ad/request") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ad_id: "ad-1", title: "T", body: "codex sponsor body", cta_text: "Go", cta_url: "https://example.com/x", earn_amount: 0.005, impression_token: "tok-1" }));
-        return;
-      }
-      if (req.url === "/ad/impression") impressions.push(raw ? JSON.parse(raw) : {});
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end("{}");
-    });
-  });
-  return new Promise((r) => server.listen(0, "127.0.0.1", () => r({ server, impressions, port: server.address().port })));
-}
-
-test("install writes official events as local node commands, never npx", async () => {
-  const { home, mod } = await sandbox();
-  for (const a of mod.CODEX_AGENTS) {
-    const msg = mod.installCodexAgent(a);
-    assert.match(msg, new RegExp(a.name));
-    const raw = readFileSync(hooksFile(home, a.homeRel), "utf8");
-    assert.ok(!/\bnpx\b/.test(raw), `${a.id}: npx in hooks.json`);
-    const cfg = readSettings(hooksFile(home, a.homeRel)).data;
-
-    for (const ev of ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]) {
-      const cmd = cfg.hooks[ev][0].hooks[0].command;
-      assert.match(cmd, /codex-hook\.mjs" \S+ --agent codex$/, `${a.id}: ${ev} command`);
-      assert.ok(cmd.includes(`--agent ${a.id}`));
-    }
-    assert.equal(cfg.hooks.TurnStart, undefined, "TurnStart is not a real Codex event");
-    assert.equal(cfg.hooks.TurnEnd, undefined);
-    assert.ok(existsSync(join(home, ".latent-protocol", "bin", "codex-hook.mjs")), "hook not staged");
-  }
-});
-
-test("install: parse-guard, backup, idempotent, legacy npx migration", async () => {
+test("uninstall strips our hooks (incl. legacy npx) and keeps the user's", async () => {
   const { home, mod } = await sandbox();
   const a = mod.CODEX_AGENTS[0];
   const p = hooksFile(home, a.homeRel);
+  const user = { hooks: [{ type: "command", command: "echo user-hook" }] };
+  const legacy = legacyHooks(home, { Stop: [user] });
+  legacy.hooks.Stop.push({
+    hooks: [{ type: "command", command: "npx --yes latent-protocol hook turn-end --agent codex" }],
+  });
+  writeFileSync(p, JSON.stringify(legacy, null, 2));
+  assert.equal(mod.codexLegacyInstalled(), true);
 
-  // unparseable → untouched
-  writeFileSync(p, "{ broken");
-  assert.match(mod.installCodexAgent(a), /not valid JSON/);
-  assert.equal(readFileSync(p, "utf8"), "{ broken");
-  assert.ok(!existsSync(p + ".latent-protocol.bak"));
-
-  // legacy npx entry + a user's own hook → migrate ours, keep theirs
-  writeFileSync(
-    p,
-    JSON.stringify({
-      hooks: {
-        Stop: [
-          { hooks: [{ type: "command", command: "npx --yes latent-protocol hook turn-end --agent codex", timeout: 10 }] },
-          { hooks: [{ type: "command", command: "echo user-hook" }] },
-        ],
-      },
-    }),
-  );
-  mod.installCodexAgent(a);
-  mod.installCodexAgent(a); // idempotent
+  assert.match(mod.uninstallCodexAgent(a), /removed Latent turn hooks/);
   const raw = readFileSync(p, "utf8");
-  assert.ok(!/\bnpx\b/.test(raw), "legacy npx not migrated");
-  const stop = readSettings(p).data.hooks.Stop;
-  assert.equal(stop.length, 2, "expected user hook + one migrated ours");
-  assert.ok(stop.some((e) => e.hooks[0].command === "echo user-hook"), "user hook dropped");
-  assert.ok(existsSync(p + ".latent-protocol.bak"));
+  assert.ok(!raw.includes("latent"), raw);
+  assert.deepEqual(readSettings(p).data.hooks, { Stop: [user] });
+  assert.equal(mod.codexLegacyInstalled(), false);
 });
 
-test("uninstall restores from the pristine backup", async () => {
+test("uninstall restores from the pristine backup and removes the staged runtime", async () => {
   const { home, mod } = await sandbox();
   const a = mod.CODEX_AGENTS[0];
   const p = hooksFile(home, a.homeRel);
   const pristine = '{\n  "hooks": {\n    "Stop": [ { "hooks": [ { "type": "command", "command": "mine" } ] } ]\n  }\n}\n';
-  writeFileSync(p, pristine);
-
-  mod.installCodexAgent(a);
-  assert.ok(readFileSync(p, "utf8").includes("codex-hook.mjs"));
+  writeFileSync(p + ".latent-protocol.bak", pristine);
+  writeFileSync(p, JSON.stringify(legacyHooks(home)));
+  const staged = join(home, ".latent-protocol", "bin", "codex-hook.mjs");
+  mkdirSync(dirname(staged), { recursive: true });
+  writeFileSync(staged, "// old runtime");
 
   mod.uninstallCodexAgent(a);
   assert.equal(readFileSync(p, "utf8"), pristine, "not byte-exact");
   assert.ok(!existsSync(p + ".latent-protocol.bak"));
+  assert.ok(!existsSync(staged), "staged runtime not removed");
 });
 
-test("staged hook: cleaned up once the sole Codex-family agent uninstalls", async () => {
+test("uninstall leaves an unparseable hooks.json alone", async () => {
   const { home, mod } = await sandbox();
-  const codex = mod.CODEX_AGENTS[0];
-  mod.installCodexAgent(codex);
-  const staged = join(home, ".latent-protocol", "bin", "codex-hook.mjs");
-  assert.ok(existsSync(staged));
-
-  mod.uninstallCodexAgent(codex);
-  assert.ok(!existsSync(staged), "staged hook not cleaned after last agent");
+  const p = hooksFile(home, mod.CODEX_AGENTS[0].homeRel);
+  writeFileSync(p, "{ broken");
+  assert.match(mod.uninstallCodexAgent(mod.CODEX_AGENTS[0]), /not valid JSON/);
+  assert.equal(readFileSync(p, "utf8"), "{ broken");
 });
 
-test("the staged codex-hook bundle runs and surfaces a sponsor line", async () => {
-  const { server, port } = await startAdServer();
+test("`init` writes no Codex hooks and strips an older release's", () => {
+  const home = mkdtempSync(join(tmpdir(), "latent-codex-init-"));
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  const p = join(home, ".codex", "hooks.json");
+  writeFileSync(p, JSON.stringify(legacyHooks(home)));
+
+  const env = { ...process.env, HOME: home };
+  delete env.CODEX_HOME;
+  execFileSync(
+    process.execPath,
+    [dist("index.js"), "init", "--yes", "--wallet", "0x7331003C29a8Db67E141dD39964B205598b60bcf"],
+    { encoding: "utf8", env },
+  );
+  assert.ok(!readFileSync(p, "utf8").includes("latent"), "legacy Codex hooks survived init");
+  assert.ok(!existsSync(join(home, ".latent-protocol", "bin", "codex-hook.mjs")));
+});
+
+test("the hook runtime ignores --agent codex: no output, no ad request", async () => {
+  let requests = 0;
+  const server = createServer((req, res) => {
+    requests += 1;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ad_id: "ad-1", body: "codex sponsor body", impression_token: "t" }));
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
   try {
-    const { home, mod } = await sandbox();
-    mkdirSync(join(home, ".latent-protocol"), { recursive: true });
+    const home = mkdtempSync(join(tmpdir(), "latent-codex-run-"));
+    mkdirSync(join(home, ".latent-protocol", "bin"), { recursive: true });
     writeFileSync(
       join(home, ".latent-protocol", "config.json"),
-      JSON.stringify({ wallet: "0xabc", enabled: true, server: `http://127.0.0.1:${port}`, frequency: 1 }),
+      JSON.stringify({ wallet: "0xabc", enabled: true, server: `http://127.0.0.1:${server.address().port}` }),
     );
-    mod.installCodexAgent(mod.CODEX_AGENTS[0]);
+    // An older install's hooks.json still points at a staged copy of the runtime.
     const staged = join(home, ".latent-protocol", "bin", "codex-hook.mjs");
+    copyFileSync(dist("claude", "hook.mjs"), staged);
 
-    const r = await runNode(staged, ["turn-start", "--agent", "codex"],
-      JSON.stringify({ prompt: "write a python etl job" }));
-    assert.equal(r.code, 0, r.err);
-    // Codex gets the sponsor line through the hook's additionalContext.
-    assert.match(r.out, /additionalContext/);
-    assert.match(r.out, /codex sponsor body/);
+    for (const ev of ["session-start", "turn-start", "turn-end", "session-end"]) {
+      const r = await new Promise((resolve) => {
+        const child = spawn(process.execPath, [staged, ev, "--agent", "codex"], {
+          env: { ...process.env, HOME: home },
+        });
+        let out = "";
+        child.stdout.on("data", (d) => (out += d));
+        child.on("close", (code) => resolve({ code, out }));
+        child.stdin.end(JSON.stringify({ prompt: "write a python etl job" }));
+      });
+      assert.equal(r.code, 0);
+      assert.equal(r.out, "", `${ev} wrote to stdout: ${r.out}`);
+    }
+    assert.equal(requests, 0, "the runtime talked to the ad server for Codex");
   } finally {
     server.close();
   }

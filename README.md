@@ -22,7 +22,7 @@ supported, adding it is a self-contained piece of work — see
 
 ## Install
 
-Public beta (`0.1.4-beta.8` on the `beta` dist-tag; `latest` currently points at the same version). Ads run against the Base Sepolia ad server — not a mainnet launch.
+Public beta (`0.1.4-beta.9` on the `beta` dist-tag; `latest` currently points at the same version). Ads run against the Base Sepolia ad server — not a mainnet launch.
 
 ```bash
 npx latent-protocol@beta init
@@ -43,13 +43,15 @@ GitHub fallback (no registry): `npx github:enzoonchain/latent-market init`.
 |-------|------------------------|-------|
 | **Claude Code** | `statusLine` + turn hooks (local `node` bundles, no `npx` at runtime); `spinnerVerbs` thinking-shimmer line on CC ≥ 2.1.143 | [`cli/src/surfaces/claude-code.ts`](cli/src/surfaces/claude-code.ts) |
 | **Grok Build** | `[ui.status_line]` command in `~/.grok/config.toml` (same staged `statusline.mjs`; restart Grok to apply) | [`cli/src/surfaces/grok.ts`](cli/src/surfaces/grok.ts) |
-| **Codex** | turn hooks in `hooks.json` (local `node` bundle, no `npx` at runtime) | [`cli/src/surfaces/codex.ts`](cli/src/surfaces/codex.ts) |
-| **MiMo Code** | native plugin in `~/.config/mimocode/plugins/`, sponsored response footer | [`cli/src/surfaces/mimo.ts`](cli/src/surfaces/mimo.ts) |
 | **OpenClaw** | plugin — sponsored footer on the final reply | [`openclaw-plugin/`](openclaw-plugin/) |
-| **Hermes** (CLI, gateway, Desktop, WebUI) | standalone plugin + WebUI extension | [`cli/src/surfaces/hermes.ts`](cli/src/surfaces/hermes.ts), [`hermes-webui.ts`](cli/src/surfaces/hermes-webui.ts) |
+| **Hermes** (Desktop, WebUI) | Desktop status-bar line (standalone plugin) + WebUI extension | [`cli/src/surfaces/hermes.ts`](cli/src/surfaces/hermes.ts), [`hermes-webui.ts`](cli/src/surfaces/hermes-webui.ts) |
 | **Cursor / VS Code** | extension: status bar, opt-in spinner patch | [`vscode-extension/`](vscode-extension/) |
 | **Telegram** | response wrapper | [`latent_protocol/adapters/telegram.py`](latent_protocol/adapters/telegram.py) |
 | **CLI apps** | `@inject` decorator | [`latent_protocol/adapters/cli.py`](latent_protocol/adapters/cli.py) |
+
+We don't ship surfaces that rewrite an LLM request or the model's reply. Codex,
+MiMo Code and the plain Hermes CLI / gateway had no other hook, so `init` no
+longer installs them — and it removes what an older release put there.
 | **Any MCP host** | MCP tool server | [`latent_protocol/mcp_server.py`](latent_protocol/mcp_server.py) |
 
 ## Develop against the mock server
