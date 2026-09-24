@@ -1,25 +1,23 @@
-# Latent Protocol — VS Code / Cursor extension
+# Latent Ads Market
 
-Earn USDC while your coding agent thinks. Shows a **labeled** sponsor line in the
-agent's spinner/status area, on the same 10-second rotation the CLI hooks use.
+Monetize the attention of agents. A labeled sponsor line while your coding agent works, and your USDC balance in the Latent panel.
 
-## Display paths
+## What you see
 
-| Path | When | What it touches |
-|------|------|-----------------|
-| **Status bar earnings** | Always | Nothing outside this extension. Click opens the Latent panel. |
-| **Status bar sponsor line + sidebar card** | After you accept the Terms | Nothing outside this extension |
-| **Claude Code and Codex spinner** | After you accept the Terms | Injects a reversible block into each installed agent bundle |
+| Surface | What it shows |
+|---------|----------------|
+| **Floating line** | The sponsor, docked above the composer while the agent is busy. |
+| **Status bar** | Latent Menu and your unpaid balance. It never carries an ad. |
+| **Panel** | Your balance, impressions, paid out, earned, and clicks. |
+| **Claude Code and Codex** | A sponsor line under the agent's own thinking row, after you accept the Terms. |
 
-Open **Latent: Open panel** to accept the Terms and Privacy disclosure, see your USDC balance, and turn Claude Code / Codex injection on or off. Earning and injection stay off until those policies are accepted. A policy version change asks again and removes injections until you accept.
+Open **Latent Ads: Open panel** to accept the Terms and Privacy disclosure, see your balance, and turn Claude Code / Codex injection on or off. Earning and injection stay off until those policies are accepted.
 
-The in-agent path writes a pristine `.latent-backup` before the first edit (or rebuilds that backup by stripping a leftover Latent block), appends a `/* LATENT-START … LATENT-END */` block, relaxes the webview CSP for `http://127.0.0.1:*` only, and re-asserts every 60s. **Latent: Restore agent bundles** or uninstall puts the originals back. If another tool already patched a bundle, Latent asks before replacing it.
+The in-agent path writes a pristine `.latent-backup` before the first edit, appends a `/* LATENT-START … LATENT-END */` block, and relaxes the webview CSP for `http://127.0.0.1:*` only. **Latent Ads: Restore agent bundles** or uninstall puts the originals back.
 
 ## Privacy
 
-Categorization runs locally over your workspace manifests; only a category slug
-leaves the machine. All ad traffic goes through a `127.0.0.1` loopback with a
-random token — your wallet/server config never enters the webview context.
+Categorization runs locally. Ad traffic goes through a `127.0.0.1` loopback with a random token. Your wallet and server config never enter the webview.
 
 ## Settings
 
@@ -29,14 +27,10 @@ random token — your wallet/server config never enters the webview context.
 - `latent.patchAgentBundles` (default `false`; the panel turns it on after you accept the Terms)
 - `latent.rotateSeconds` (default `10`)
 
-## Release
-
-Tag a GitHub Release `vscode-v0.4.0` (must match `package.json`). [`.github/workflows/vscode-release.yml`](../.github/workflows/vscode-release.yml) attaches `latent-protocol-vscode.vsix`. Publisher is `latent-protocol`. Open VSX / VS Code Marketplace submission still needs a 128×128 `icon` in `package.json` before the listing can be published; until then `latent init` installs the GitHub VSIX.
-
 ## Build
 
 ```bash
 npm install
-npm run build      # → dist/extension.js
-# package with: npx @vscode/vsce package
+npm run build
+npx @vscode/vsce package
 ```
