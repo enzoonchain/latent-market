@@ -79,15 +79,39 @@ function osc8Link(text: string, url: string): string {
   return `\u001b]8;;${url}\u001b\\${text}\u001b]8;;\u001b\\`;
 }
 
+const MAX_BARE_URL = 120;
+
+/** osc8 = the text is the link. plain = short URL beside it. hybrid = both. */
+function linkShape(): "osc8" | "plain" | "hybrid" {
+  const e = process.env;
+  if (e.TMUX) return "plain";
+  if (e.SSH_TTY || e.SSH_CONNECTION) return "hybrid";
+  if (e.KITTY_WINDOW_ID || e.WEZTERM_PANE || e.ITERM_SESSION_ID) return "osc8";
+  if (e.ALACRITTY_SOCKET || e.ALACRITTY_WINDOW_ID) return "plain";
+  const term = e.TERM_PROGRAM || "";
+  if (term === "vscode" || term === "iTerm.app" || term === "WezTerm") return "osc8";
+  if (term === "Apple_Terminal" || term === "WarpTerminal") return "plain";
+  if (e.WT_SESSION) return "osc8";
+  return process.platform === "win32" ? "plain" : "hybrid";
+}
+
 export function formatStatusline(ad: Ad): string {
   // Advertiser-controlled — strip escape sequences / control chars before this
   // reaches the terminal. isSafeUrl() already guards the OSC 8 link target.
-  const body = sanitizeAdText(ad.body || ad.title || "", AD_LIMITS.body);
-  const ctaText = sanitizeAdText(ad.cta_text || "Learn more", AD_LIMITS.cta_text) || "Learn more";
+  const body = sanitizeAdText(ad.body || ad.title || "", AD_LIMITS.body) || "Sponsored";
   const ctaUrl = ad.cta_url || "";
   const earn = ad.earn_amount ?? 0;
-  const cta = osc8Link(`${ctaText} →`, ctaUrl);
-  return `${body}  ${cta}  \u001b[2m· Sponsored: +$${earn} USDC\u001b[0m`;
+  const label = `ad· ${body}`;
+  const bare = isSafeUrl(ctaUrl) && ctaUrl.length <= MAX_BARE_URL ? `  ${ctaUrl}` : "";
+  const shape = linkShape();
+  const linked = !isSafeUrl(ctaUrl)
+    ? label
+    : shape === "osc8"
+      ? osc8Link(label, ctaUrl)
+      : shape === "plain"
+        ? label + bare
+        : osc8Link(label, ctaUrl) + bare;
+  return `${linked}  \u001b[2m· Sponsored: +$${earn} USDC\u001b[0m`;
 }
 
 function loadCache(): Cache {

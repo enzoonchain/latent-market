@@ -42,6 +42,9 @@ _CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
 _DEFAULT_ROTATE_SECONDS = 30
 _DEFAULT_REFRESH_INTERVAL = 30
+# Bill only after the cached line has been on screen this long. The statusLine
+# command restarts every refresh; dwell is the cache age, not process time.
+_MIN_BILL_SECONDS = 10
 
 
 # ── Rendering ────────────────────────────────────────────────────────────────
@@ -71,6 +74,35 @@ def _osc8_link(text: str, url: str) -> str:
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
+# Past this the bare URL wraps and terminals stop treating it as one link.
+_MAX_BARE_URL = 120
+
+
+def _link_shape() -> str:
+    """How to emit a clickable status line for the terminal that is running us.
+
+    ``osc8`` — the text itself is the hyperlink.
+    ``plain`` — no OSC 8; append a short URL the terminal can auto-detect and the user can select.
+    ``hybrid`` — both, so a terminal that strips OSC 8 still shows a copyable URL.
+    """
+    if os.environ.get("TMUX"):
+        return "plain"
+    if os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"):
+        return "hybrid"
+    if os.environ.get("KITTY_WINDOW_ID") or os.environ.get("WEZTERM_PANE") or os.environ.get("ITERM_SESSION_ID"):
+        return "osc8"
+    if os.environ.get("ALACRITTY_SOCKET") or os.environ.get("ALACRITTY_WINDOW_ID"):
+        return "plain"
+    term = os.environ.get("TERM_PROGRAM") or ""
+    if term in ("vscode", "iTerm.app", "WezTerm"):
+        return "osc8"
+    if term in ("Apple_Terminal", "WarpTerminal"):
+        return "plain"
+    if os.environ.get("WT_SESSION"):
+        return "osc8"
+    return "plain" if sys.platform == "win32" else "hybrid"
+
+
 def format_statusline(ad: dict) -> str:
     """Single-line sponsored status line (ANSI). No trailing newline.
 
@@ -80,12 +112,20 @@ def format_statusline(ad: dict) -> str:
     would act on the terminal itself, not just render as text).
     """
     body = sanitize_ad_text(ad.get("body") or ad.get("title"), AD_LIMITS["body"]) or "Sponsored"
-    cta_text = sanitize_ad_text(ad.get("cta_text"), AD_LIMITS["cta_text"]) or "Learn more"
-    cta_url = ad.get("cta_url", "")
+    cta_url = ad.get("cta_url", "") if isinstance(ad.get("cta_url"), str) else ""
     earn = ad.get("earn_amount", 0)
-    cta = _osc8_link(f"{cta_text} →", cta_url)
-    # body · cta, then a quiet dim tag — no loud colour, no emoji.
-    return f"{body}  {cta}  \033[2m· Sponsored: +${earn} USDC\033[0m"
+    label = f"ad· {body}"
+    bare = f"  {cta_url}" if _is_safe_url(cta_url) and len(cta_url) <= _MAX_BARE_URL else ""
+    shape = _link_shape()
+    if not _is_safe_url(cta_url):
+        linked = label
+    elif shape == "osc8":
+        linked = _osc8_link(label, cta_url)
+    elif shape == "plain":
+        linked = label + bare
+    else:
+        linked = _osc8_link(label, cta_url) + bare
+    return f"{linked}  \033[2m· Sponsored: +${earn} USDC\033[0m"
 
 
 # ── Cache (rotation) ─────────────────────────────────────────────────────────
@@ -138,11 +178,32 @@ def _context_from_session(session: dict) -> str:
     return "coding"
 
 
+def _bill_cached(cache: dict, now: float, config: Config) -> None:
+    """Credit the cached ad once it has been shown for ``_MIN_BILL_SECONDS``."""
+    ad = cache.get("ad")
+    if not ad or cache.get("billed"):
+        return
+    elapsed = now - float(cache.get("fetched_at") or 0)
+    if elapsed < _MIN_BILL_SECONDS:
+        return
+    from ..delivery import confirm_display
+
+    confirm_display(
+        Tracker(config.server),
+        ad,
+        config.wallet,
+        displayed_ms=int(elapsed * 1000),
+    )
+    cache["billed"] = True
+    _save_cache(cache)
+
+
 def render(session: dict | None = None) -> str:
     """Return the status-line string to print, or '' to show nothing.
 
     Rotates ads on disk so impressions are billed once per rotation window, not
-    once per refresh. Fails open: any error returns ''.
+    once per refresh, and only after the line has been on screen for 10s.
+    Fails open: any error returns ''.
     """
     session = session or {}
     config = Config.from_env()
@@ -150,8 +211,9 @@ def render(session: dict | None = None) -> str:
         return ""
 
     session_id = str(session.get("session_id", "") or "")
-    cache = _load_cache()
     now = time.time()
+    cache = _load_cache()
+    _bill_cached(cache, now, config)
 
     fresh = (
         cache.get("ad")
@@ -161,8 +223,7 @@ def render(session: dict | None = None) -> str:
     if fresh:
         return format_statusline(cache["ad"])
 
-    # Rotation window elapsed (or first run) → reserve, render, then bill.
-    from ..delivery import confirm_display, reserve_ad
+    from ..delivery import reserve_ad
 
     client = AdClient(config.server)
     ad = reserve_ad(
@@ -178,9 +239,8 @@ def render(session: dict | None = None) -> str:
     line = format_statusline(ad)
     if not line:
         return ""
-    # Commit point: Claude Code displays whatever we return on the status line.
-    confirm_display(Tracker(config.server), ad, config.wallet)
-    _save_cache({"ad": ad, "fetched_at": now, "session_id": session_id})
+    # Shown now; billed on a later refresh once dwell clears 10s.
+    _save_cache({"ad": ad, "fetched_at": now, "session_id": session_id, "billed": False})
     return line
 
 

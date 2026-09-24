@@ -69,29 +69,42 @@ def test_fetches_and_logs_impression(env, monkeypatch):
     assert "https://acme.io" in line  # OSC 8 link target
     client.get_ad.assert_called_once()
     assert client.get_ad.call_args.kwargs["surface"] == "status_line"
-    tracker.log_impression.assert_called_once_with("ad-1", "0xDEADBEEF", "tok-abc")
+    tracker.log_impression.assert_not_called()
+
+
+def test_bills_after_ten_seconds(env, monkeypatch):
+    client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    times = iter([1000.0, 1010.0])
+    monkeypatch.setattr(cc.time, "time", lambda: next(times))
+    cc.render({"session_id": "s1"})
+    cc.render({"session_id": "s1"})
+    assert client.get_ad.call_count == 1
+    tracker.log_impression.assert_called_once_with(
+        "ad-1", "0xDEADBEEF", "tok-abc", displayed_ms=10000
+    )
 
 
 def test_reuses_cache_within_rotation_window(env, monkeypatch):
     client, tracker = env
     monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
-    times = iter([1000.0, 1005.0, 1009.0])  # all within 30s window
+    times = iter([1000.0, 1005.0, 1009.0])  # all within 30s window, under 10s dwell
     monkeypatch.setattr(cc.time, "time", lambda: next(times))
     cc.render({"session_id": "s1"})
     cc.render({"session_id": "s1"})
     cc.render({"session_id": "s1"})
-    # Only the first refresh fetched + billed; the rest reused the cache.
     assert client.get_ad.call_count == 1
-    assert tracker.log_impression.call_count == 1
+    tracker.log_impression.assert_not_called()
 
 
 def test_refetches_after_rotation_window(env, monkeypatch):
     client, tracker = env
     monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
-    times = iter([1000.0, 1040.0])  # second call is >30s later
+    times = iter([1000.0, 1040.0, 1050.0])
     monkeypatch.setattr(cc.time, "time", lambda: next(times))
     cc.render({"session_id": "s1"})
-    cc.render({"session_id": "s1"})
+    cc.render({"session_id": "s1"})  # bills the first ad (40s), fetches the next
+    cc.render({"session_id": "s1"})  # bills the second ad (10s)
     assert client.get_ad.call_count == 2
     assert tracker.log_impression.call_count == 2
 
@@ -130,6 +143,24 @@ def test_uninstall_removes_only_ours(env):
     data = json.loads(cc._CLAUDE_SETTINGS.read_text())
     assert "statusLine" not in data
     assert data["theme"] == "dark"
+
+
+def test_statusline_plain_shape_appends_a_short_url(monkeypatch):
+    monkeypatch.setenv("TMUX", "1")
+    line = cc.format_statusline(FAKE_AD)
+    assert "ad· " in line
+    assert "\033]8;;" not in line
+    assert "https://acme.io" in line
+
+
+def test_statusline_osc8_shape_hides_a_long_bare_url(monkeypatch):
+    monkeypatch.setenv("TERM_PROGRAM", "vscode")
+    monkeypatch.delenv("TMUX", raising=False)
+    long_url = "https://acme.io/" + ("a" * 200)
+    line = cc.format_statusline({**FAKE_AD, "cta_url": long_url})
+    assert "\033]8;;" in line
+    assert long_url in line  # inside the OSC 8 payload
+    assert f"  {long_url}" not in line.split("\033]8;;", 1)[-1]
 
 
 def test_osc8_only_for_safe_https():
