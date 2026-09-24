@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { deviceId, loadConfig } from "./config.js";
 import { recordServerResult, shouldServe } from "./health.js";
 import { inlineIcon } from "./icon.js";
+import { MIN_VIEW_MS } from "./metrics.js";
 
 export interface LoopbackIdentity {
   port: number;
@@ -115,8 +116,14 @@ export class Loopback {
    * gating rides on /ad/impression's displayed_ms), so these stay local —
    * telemetry for the test/diagnose surface, never forwarded upstream. */
   private events: FunnelEvent[] = [];
+  /** Build id last reported by the workbench overlay in this window. */
+  private reportedBuild = "";
 
-  constructor(private readonly agent: string, private readonly getCategory: () => string) {}
+  constructor(
+    private readonly agent: string,
+    private readonly getCategory: () => string,
+    private readonly mayServe: () => boolean = () => true,
+  ) {}
 
   /** Base URL the injected block calls, e.g. http://127.0.0.1:5123/cb/<token> */
   get baseUrl(): string {
@@ -126,6 +133,11 @@ export class Loopback {
   /** Last funnel events seen (for the test/diagnose surface). */
   recentEvents(): FunnelEvent[] {
     return [...this.events];
+  }
+
+  /** Build id from the overlay script that is actually running. Empty until it checks in. */
+  helloBuild(): string {
+    return this.reportedBuild;
   }
 
   async start(): Promise<void> {
@@ -183,13 +195,19 @@ export class Loopback {
         return redirect(res, rec?.ctaUrl && !cfg.server ? rec.ctaUrl : chain);
       }
 
-      if (!cfg.enabled || !cfg.wallet || !shouldServe().ok) {
+      if (route === "hello" && req.method === "GET") {
+        this.reportedBuild = (url.searchParams.get("build") || "").slice(0, 64);
+        return send(res, 200, { ok: true });
+      }
+
+      if (!cfg.enabled || !cfg.wallet || !this.mayServe() || !shouldServe().ok) {
         send(res, 200, { ad: null });
         return;
       }
 
       if (route === "ad" && req.method === "GET") {
         const category = url.searchParams.get("cat") || this.getCategory() || "general";
+        const pane = (url.searchParams.get("pane") || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
         const r = await fetch(`${cfg.server}/ad/request`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -199,7 +217,7 @@ export class Loopback {
             context: category, // slug only
             surface: "spinner",
             tags: category ? [category] : [],
-            session_id: this.token,
+            session_id: pane ? `${this.token}:${pane}` : this.token,
             device_id: deviceId(),
           }),
           signal: AbortSignal.timeout(3000),
@@ -223,6 +241,7 @@ export class Loopback {
             token: (ad.impression_token as string) || "",
             clickHref: adId ? `${this.baseUrl}/click?adId=${encodeURIComponent(adId)}` : "",
             iconUrl: typeof ad.image_url === "string" ? await inlineIcon(ad.image_url, cfg.server) : "",
+            earnAmount: Number.isFinite(Number(ad.earn_amount)) ? Number(ad.earn_amount) : 0,
           },
         });
       }
@@ -234,6 +253,9 @@ export class Loopback {
           displayedMs?: number;
           surface?: string;
         };
+        if (typeof body.displayedMs !== "number" || body.displayedMs < MIN_VIEW_MS) {
+          return send(res, 200, { ok: true, skipped: "below_view_threshold" });
+        }
         await fetch(`${cfg.server}/ad/impression`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

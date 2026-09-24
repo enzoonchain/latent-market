@@ -192,13 +192,28 @@ function patchCspHostFile(hostPath: string): void {
   }
 }
 
+/** Drop our marker block. Foreign markers (e.g. VIBE-ADS) are left in place. */
+export function stripLatentBlock(content: string): string {
+  const s = content.indexOf(MARK_START);
+  const e = content.indexOf(MARK_END);
+  if (s === -1 || e === -1 || e < s) return content;
+  return (content.slice(0, s) + content.slice(e + MARK_END.length)).replace(/\n{3,}/g, "\n\n");
+}
+
 export function patch(bundle: AgentBundle, block: string): "patched" | "incompatible" | "error" {
   try {
     const original = readFileSync(bundle.bundlePath, "utf8");
-    if (!VERB_ANCHORS.some((v) => original.includes(v))) return "incompatible";
+    if (!VERB_ANCHORS.some((v) => original.includes(v)) && !VERB_ANCHORS.some((v) => stripLatentBlock(original).includes(v))) {
+      return "incompatible";
+    }
 
     const backup = bundle.bundlePath + BACKUP_SUFFIX;
-    if (!existsSync(backup)) copyFileSync(bundle.bundlePath, backup);
+    if (!existsSync(backup)) {
+      // Fossil: a live file that already carries our block has no pristine copy.
+      // Strip only our marker and keep that as the backup, then patch from it.
+      const seed = original.includes(MARK_START) ? stripLatentBlock(original) : original;
+      writeFileSync(backup, seed);
+    }
 
     // Start from pristine so re-patching never stacks blocks.
     const pristine = readFileSync(backup, "utf8");

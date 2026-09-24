@@ -9,7 +9,14 @@ afterEach(() => vi.unstubAllGlobals());
 describe("fetchEarnings", () => {
   it("returns the real balance on 200", async () => {
     stub(200, { balance: 1.2345, tier: "gold" });
-    expect(await fetchEarnings("https://s", "0xabc")).toEqual({ kind: "ok", balance: 1.2345, tier: "gold" });
+    expect(await fetchEarnings("https://s", "0xabc")).toEqual({
+      kind: "ok",
+      balance: 1.2345,
+      totalEarned: 0,
+      impressions: 0,
+      clicks: 0,
+      tier: "gold",
+    });
   });
 
   it("treats 401 (unsigned read, server #100) as private — not $0.00", async () => {

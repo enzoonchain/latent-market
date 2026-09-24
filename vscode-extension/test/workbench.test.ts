@@ -11,7 +11,9 @@ import {
   patchWorkbench,
   restoreAllWorkbenches,
   restoreWorkbench,
+  syncWorkbenchChecksum,
 } from "../src/workbench.js";
+import { createHash } from "node:crypto";
 
 // Trimmed copy of Cursor 3.21's workbench.html tail.
 const PRISTINE = `<!DOCTYPE html>
@@ -75,6 +77,24 @@ describe("workbench patcher", () => {
     patchWorkbench(html, "/* block */");
     restoreWorkbench(html);
     expect(readFileSync(html, "utf8")).toBe(updated);
+  });
+
+  it("rewrites the workbench.html checksum while patched and restores it", () => {
+    const product = join(home, "app", "product.json");
+    const pristineSum = createHash("sha256").update(PRISTINE).digest("base64").replace(/=+$/, "");
+    writeFileSync(
+      product,
+      `{\n\t"checksums": {\n\t\t"vs/code/electron-sandbox/workbench/workbench.html": "${pristineSum}"\n\t}\n}\n`,
+    );
+    patchWorkbench(html, "/* block */");
+    const patched = JSON.parse(readFileSync(product, "utf8")) as { checksums: Record<string, string> };
+    const liveSum = createHash("sha256").update(readFileSync(html)).digest("base64").replace(/=+$/, "");
+    expect(patched.checksums["vs/code/electron-sandbox/workbench/workbench.html"]).toBe(liveSum);
+    expect(liveSum).not.toBe(pristineSum);
+    restoreWorkbench(html);
+    const restored = JSON.parse(readFileSync(product, "utf8")) as { checksums: Record<string, string> };
+    expect(restored.checksums["vs/code/electron-sandbox/workbench/workbench.html"]).toBe(pristineSum);
+    syncWorkbenchChecksum(join(home, "missing.html"));
   });
 
   it("restoreAllWorkbenches finds patched workbenches without an app root (uninstall path)", () => {

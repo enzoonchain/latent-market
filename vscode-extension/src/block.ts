@@ -24,11 +24,14 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
   try {
     if (window.__latentActive) return; window.__latentActive = true;
     var CFG = ${cfg};
+    var PANE = Math.random().toString(16).slice(2, 10);
     var MIN_VIEW_MS = 10000, TICK_MS = 2500;
     var cur = null, viewing = false, viewSince = 0, cumMs = 0, billed = false, tickAt = 0, viewableSent = false;
     function spinner(){
       return document.querySelector('[class*="spinnerRow_"]')
           || document.querySelector('[class*="statusRow_"]')
+          || document.querySelector('[class*="shimmer"]')
+          || document.querySelector('[class*="thinkingShimmer"]')
           || document.querySelector('[data-latent-spinner]');
     }
     function busy(){ var s = spinner(); return !!(s && s.offsetParent !== null); }
@@ -75,7 +78,7 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     }
     async function fetchAd(){
       try {
-        var r = await fetch(CFG.base + '/ad?cat=' + encodeURIComponent(CFG.cat));
+        var r = await fetch(CFG.base + '/ad?cat=' + encodeURIComponent(CFG.cat) + '&pane=' + encodeURIComponent(PANE));
         var j = await r.json(); return j && j.ad ? j.ad : null;
       } catch(e){ return null; }
     }
@@ -88,7 +91,7 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       var ms = totalMs();
       metric(ms >= MIN_VIEW_MS ? 'view_threshold_met' : 'error_impression', { cumulative_ms: ms });
       try { fetch(CFG.base + '/impression', { method:'POST', headers:{'Content-Type':'application/json'}, keepalive: true,
-        body: JSON.stringify({ adId: cur.adId, token: cur.token, displayedMs: ms, surface: 'spinner' }) }); } catch(e){}
+        body: JSON.stringify({ adId: cur.adId, token: cur.token, displayedMs: ms, surface: 'spinner', pane: PANE }) }); } catch(e){}
     }
     function leave(){ if(!viewing) return; cumMs += Date.now() - viewSince; viewing = false; }
     function endCycle(){
@@ -99,21 +102,60 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     }
     function paint(){
       var s = spinner(); if(!s || !cur) return;
-      var label = s.querySelector('[data-latent-label]');
-      if(!label){
-        label = document.createElement('a'); label.setAttribute('data-latent-label','1');
-        label.style.opacity='0.85'; label.style.textDecoration='none';
-        label.addEventListener('click', function(){
+      var row = s.querySelector('[data-latent-row]');
+      if(!row){
+        row = document.createElement('span');
+        row.setAttribute('data-latent-row','1');
+        row.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:8px;min-width:0;max-width:100%;vertical-align:middle;';
+        var img = document.createElement('img');
+        img.setAttribute('data-latent-favicon','1');
+        img.alt = '';
+        img.style.cssText = 'width:14px;height:14px;border-radius:3px;display:none;object-fit:cover;flex:none;';
+        var label = document.createElement('a');
+        label.setAttribute('data-latent-label','1');
+        label.style.cssText = 'color:inherit;text-decoration:underline;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;';
+        var tag = document.createElement('span');
+        tag.setAttribute('data-latent-tag','1');
+        tag.style.cssText = 'font-size:10px;opacity:.65;flex:none;';
+        var open = document.createElement('a');
+        open.setAttribute('data-latent-open','1');
+        open.textContent = 'Open';
+        open.style.cssText = 'flex:none;cursor:pointer;text-decoration:none;border:1px solid currentColor;border-radius:999px;padding:1px 8px;font-size:11px;line-height:16px;opacity:.9;';
+        function onClick(){
           // Best-effort billing twin — the href navigation is the real path.
           try { fetch(CFG.base + '/click', { method:'POST', headers:{'Content-Type':'application/json'}, keepalive: true,
             body: JSON.stringify({ adId: cur ? cur.adId : '', surface: 'spinner' }) }); } catch(e){}
-        });
-        s.appendChild(label);
+        }
+        label.addEventListener('click', onClick);
+        open.addEventListener('click', onClick);
+        row.appendChild(img); row.appendChild(label); row.appendChild(tag); row.appendChild(open);
+        s.appendChild(row);
       }
+      var labelEl = row.querySelector('[data-latent-label]');
+      var openEl = row.querySelector('[data-latent-open]');
+      var tagEl = row.querySelector('[data-latent-tag]');
+      var imgEl = row.querySelector('[data-latent-favicon]');
       var url = isHttps(cur.url) ? clean(cur.url) : '';
       var href = isLoopback(cur.clickHref) ? clean(cur.clickHref) : '';
-      label.textContent = '  ' + clean(cur.text) + (url ? '  (' + url + ')' : '') + '  \u00b7 Sponsored';
-      if(href){ label.setAttribute('href', href); }
+      labelEl.textContent = clean(cur.text);
+      labelEl.removeAttribute('title');
+      openEl.removeAttribute('title');
+      if(href){ labelEl.setAttribute('href', href); openEl.setAttribute('href', href); }
+      else { labelEl.removeAttribute('href'); openEl.removeAttribute('href'); }
+      if(billed && totalMs() >= MIN_VIEW_MS){
+        tagEl.textContent = 'credited';
+        tagEl.style.color = '#16a34a';
+        tagEl.style.opacity = '1';
+        tagEl.style.fontWeight = '700';
+      } else {
+        tagEl.textContent = '\u00b7 Sponsored';
+        tagEl.style.color = '';
+        tagEl.style.opacity = '.65';
+        tagEl.style.fontWeight = '';
+      }
+      var icon = isDataImage(cur.iconUrl) ? cur.iconUrl : '';
+      if(icon){ imgEl.src = icon; imgEl.style.display = 'inline-block'; }
+      else { imgEl.style.display = 'none'; }
       paintIcon(s);
     }
     async function show(){

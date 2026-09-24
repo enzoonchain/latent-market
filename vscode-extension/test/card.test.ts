@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { cardHtml } from "../src/card.js";
-import { isSafeHttpUrl, sanitizeText } from "../src/urlsafe.js";
+import { isLoopbackClickHref, isSafeHttpUrl, sanitizeText, sponsorOpenUrl } from "../src/urlsafe.js";
 
 // Control chars minus the newlines/tabs our own HTML template contains.
 const CTRL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/;
@@ -29,6 +29,21 @@ describe("isSafeHttpUrl", () => {
   });
 });
 
+describe("sponsorOpenUrl", () => {
+  const chain = "http://127.0.0.1:5123/cb/ab/click?adId=ad1";
+  it("prefers the loopback click chain over the advertiser url", () => {
+    expect(isLoopbackClickHref(chain)).toBe(true);
+    expect(sponsorOpenUrl({ clickHref: chain, url: "https://acme.example/x" })).toBe(chain);
+  });
+  it("falls back to https and rejects anything else", () => {
+    expect(sponsorOpenUrl({ url: "https://acme.example/x" })).toBe("https://acme.example/x");
+    expect(sponsorOpenUrl({ clickHref: "http://127.0.0.1.evil/cb/ab/click?adId=1", url: "javascript:alert(1)" })).toBe("");
+    expect(isLoopbackClickHref("http://127.0.0.1:1/other/click?adId=1")).toBe(false);
+    expect(isLoopbackClickHref("http://user:pass@127.0.0.1:1/cb/ab/click?adId=1")).toBe(false);
+    expect(isLoopbackClickHref("http://evil.com/cb/ab/click?adId=1")).toBe(false);
+  });
+});
+
 describe("cardHtml", () => {
   it("never emits an <a href> for a non-https url", () => {
     for (const url of ["javascript:alert(document.cookie)", "data:text/html,x", "http://e.x"]) {
@@ -41,7 +56,7 @@ describe("cardHtml", () => {
 
   it("renders an <a href> for an https url, HTML-escaped", () => {
     const html = cardHtml({ text: "Try Acme", url: 'https://acme.example/x?a="b"&c=<d>' }, "0xabc");
-    expect(html).toMatch(/<a href="https:\/\/acme\.example\/x\?a=&quot;b&quot;&amp;c=&lt;d&gt;"/);
+    expect(html).toMatch(/<a class="open" href="https:\/\/acme\.example\/x\?a=&quot;b&quot;&amp;c=&lt;d&gt;"/);
   });
 
   it("prefers the loopback /click chain over the raw cta_url", () => {
@@ -49,7 +64,7 @@ describe("cardHtml", () => {
       { text: "Try Acme", url: "https://acme.example", clickHref: "http://127.0.0.1:5123/cb/t/click?adId=a1" },
       "0xabc",
     );
-    expect(html).toMatch(/<a href="http:\/\/127\.0\.0\.1:5123\/cb\/t\/click\?adId=a1"/);
+    expect(html).toMatch(/<a class="open" href="http:\/\/127\.0\.0\.1:5123\/cb\/t\/click\?adId=a1"/);
   });
 
   it("ignores a non-loopback clickHref (injection guard)", () => {
@@ -92,5 +107,6 @@ describe("cardHtml loopback check", () => {
     );
     expect(html).not.toContain("evil.com");
     expect(html).toContain('href="https://adv.example/a"');
+    expect(html).toContain("adv.example/a</div>");
   });
 });

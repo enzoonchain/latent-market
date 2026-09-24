@@ -51,13 +51,16 @@ function save(s: HealthState): void {
 export interface ServeDecision {
   ok: boolean;
   reason?: "killswitch" | "incident-backoff";
+  detail?: string;
 }
 
 export function shouldServe(now = Date.now(), state: HealthState = load()): ServeDecision {
   if (state.killed && state.killCheckedAt !== undefined) {
     const grace =
       KILL_TTL_MS + (state.killKind === "unreachable" ? KILL_SOFT_GRACE_MS : KILL_STALE_GRACE_MS);
-    if (now - state.killCheckedAt < grace) return { ok: false, reason: "killswitch" };
+    if (now - state.killCheckedAt < grace) {
+      return { ok: false, reason: "killswitch", detail: state.killReason || "" };
+    }
   }
   if (state.guardOpenUntil !== undefined && now < state.guardOpenUntil) {
     return { ok: false, reason: "incident-backoff" };

@@ -52,6 +52,17 @@ describe("patch / restore", () => {
     expect(readFileSync(b.cspHostPath!, "utf8").match(/connect-src/g)).toHaveLength(1);
   });
 
+  it("mints a pristine backup from a live file that already carries the block", () => {
+    const b = fixture();
+    const pristine = readFileSync(b.bundlePath, "utf8");
+    writeFileSync(b.bundlePath, `${pristine}\n/* LATENT-START */old/* LATENT-END */\n`);
+    expect(patch(b, "/* LATENT-START */new/* LATENT-END */")).toBe("patched");
+    const backup = readFileSync(b.bundlePath + ".latent-backup", "utf8");
+    expect(backup).not.toContain("LATENT-START");
+    expect(backup).toContain("Thinking");
+    expect(readFileSync(b.bundlePath, "utf8")).toContain("LATENT-START */new");
+  });
+
   it("restore puts both files back byte-for-byte", () => {
     const b = fixture();
     const bundle0 = readFileSync(b.bundlePath, "utf8");

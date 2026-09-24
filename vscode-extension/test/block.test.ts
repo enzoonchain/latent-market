@@ -16,6 +16,7 @@ describe("buildBlock", () => {
 
   it("is idempotent (guards against double-eval)", () => {
     expect(block).toContain("__latentActive");
+    expect(block).toContain("&pane=");
   });
 
   it("wraps in a fail-open IIFE", () => {

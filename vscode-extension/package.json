@@ -2,7 +2,7 @@
   "name": "latent-protocol-vscode",
   "displayName": "Latent Protocol — Sponsored Spinner",
   "description": "Earn USDC while your coding agent thinks. Shows a labeled sponsor line in the agent's spinner/status area (Cursor, VS Code, Claude Code, Codex).",
-  "version": "0.3.0",
+  "version": "0.5.3",
   "publisher": "latent-protocol",
   "license": "Apache-2.0",
   "repository": {
@@ -37,6 +37,22 @@
       {
         "command": "latent.restore",
         "title": "Latent: Restore agent bundles (undo patch)"
+      },
+      {
+        "command": "latent.openPanel",
+        "title": "Latent: Open panel"
+      },
+      {
+        "command": "latent.openSponsor",
+        "title": "Latent: Open sponsored link"
+      },
+      {
+        "command": "latent.copySponsor",
+        "title": "Latent: Copy sponsored link"
+      },
+      {
+        "command": "latent.diagnose",
+        "title": "Latent: Diagnose"
       },
       {
         "command": "latent.showEarnings",
@@ -83,18 +99,33 @@
           "default": 10,
           "description": "How often the shown sponsor line rotates."
         },
+        "latent.sponsorSurface": {
+          "type": "string",
+          "enum": ["statusbar", "overlay"],
+          "default": "statusbar",
+          "description": "Unused. The sponsor line is the floating composer line. The status bar shows Latent Menu and the balance."
+        },
         "latent.cursorOverlay": {
           "type": "boolean",
           "default": false,
-          "description": "Experimental, Cursor only: show the sponsor line in the agent composer area. Adds one script tag to Cursor's workbench.html (pristine backup kept, restored on disable/uninstall); Cursor may report its installation as modified while this is on. Re-applied after Cursor updates."
+          "description": "Unused. Sponsor placement is latent.sponsorSurface."
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "latent",
+          "title": "Latent",
+          "icon": "media/latent.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "latent": [
         {
           "id": "latentSponsor",
-          "name": "Latent Sponsor",
+          "name": "Latent",
           "type": "webview"
         }
       ]
