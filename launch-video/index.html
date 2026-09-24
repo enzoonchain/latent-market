@@ -45,8 +45,8 @@ canvas.layer{width:1920px;height:1080px}
 #monument{position:absolute;left:1030px;top:380px;width:1000px;height:760px}
 .spaced{position:absolute;left:0;right:0;text-align:center;font-weight:400;letter-spacing:.42em;text-indent:.42em;font-size:34px;color:#fff;text-shadow:0 2px 30px rgba(20,50,140,.35)}
 .spaced span{display:inline-block}
-#stage3tx{top:330px}
-#lockup{position:absolute;left:0;right:0;top:330px;display:flex;flex-direction:column;align-items:center}
+#stage3tx{top:250px}
+#lockup{position:absolute;left:0;right:0;top:420px;display:flex;flex-direction:column;align-items:center}
 #lockup::before,#end::before{content:"";position:absolute;left:50%;top:50%;width:1500px;height:620px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(240,246,255,.7),rgba(240,246,255,0));z-index:-1}
 .lockrow{display:flex;align-items:center;gap:56px}
 .word{font-size:78px;font-weight:400;letter-spacing:.62em;margin-right:-.62em;color:var(--slate)}
@@ -58,48 +58,67 @@ canvas.layer{width:1920px;height:1080px}
 .arcs i{position:absolute;border-radius:50%;border:1px solid rgba(107,158,255,.18)}
 .label{position:absolute;left:160px;top:250px;font-size:17px;font-weight:600;letter-spacing:.32em;color:var(--deep)}
 .h1{position:absolute;left:156px;top:300px;font-size:84px;line-height:1.02;font-weight:600;letter-spacing:-.045em;color:var(--slate)}
-.para{position:absolute;left:160px;font-size:27px;line-height:1.45;color:#4a5670;width:620px;letter-spacing:-.01em}
-.big{position:absolute;left:156px;top:640px}
-.big .num{font-size:170px;font-weight:600;letter-spacing:-.06em;line-height:1;background:linear-gradient(135deg,#6B9EFF,#2E5BFF 60%,#1c3fd0);-webkit-background-clip:text;background-clip:text;color:transparent}
-.big .cap2{font-size:26px;color:#4a5670;margin-top:14px;width:560px;line-height:1.4}
-.card{position:absolute;background:rgba(255,255,255,.78);border:1px solid rgba(15,23,42,.06);border-radius:26px;box-shadow:0 30px 80px rgba(46,91,255,.12),0 2px 6px rgba(15,23,42,.04)}
+.para{position:absolute;left:160px;font-size:27px;line-height:1.45;color:#4a5670;width:640px;letter-spacing:-.01em}
+.card{position:absolute;background:rgba(255,255,255,.8);border:1px solid rgba(15,23,42,.06);border-radius:26px;box-shadow:0 30px 80px rgba(46,91,255,.12),0 2px 6px rgba(15,23,42,.04)}
 .dark{background:#0F172A;border-radius:26px;box-shadow:0 40px 90px rgba(15,23,42,.35)}
+.fl{font-size:14px;font-weight:600;letter-spacing:.2em;color:#7a869f}
 #cli{position:absolute;left:980px;top:270px;width:780px;height:470px}
-#cli .inner{padding:40px 46px;font-family:JBM,monospace;font-size:26px;line-height:1.9;color:#dbe6ff}
+#cli .inner{padding:40px 46px;font-family:JBM,monospace;font-size:24px;line-height:1.9;color:#dbe6ff}
 #cli .lbl{font-family:Inter;font-size:15px;letter-spacing:.2em;color:#6d7a96;margin-bottom:10px}
 .ok{color:#5fd49a}
 .cli-row{white-space:pre}
 .cli-row .dim2{color:#6d7a96}
-#surfaces{position:absolute;left:980px;top:170px;width:780px}
-.surf{position:relative;height:104px;margin-bottom:18px;border-radius:20px;overflow:hidden;display:flex;align-items:center;padding:0 28px;box-sizing:border-box;box-shadow:0 18px 50px rgba(46,91,255,.12)}
-.surf .name{position:absolute;left:28px;top:14px;font-size:14px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
-.surf .line{margin-top:26px;font-size:21px;white-space:pre;display:flex;align-items:center;gap:12px}
-.s-term{background:#0F172A;color:#dbe6ff}.s-term .name{color:#6d7a96}.s-term .line{font-family:JBM,monospace}
-.s-vsc{background:#fff;color:#0F172A}.s-vsc .name{color:#7a869f}
-.s-vsc .sbar{position:absolute;left:0;right:0;bottom:0;height:40px;background:#2E5BFF;color:#fff;font-size:17px;display:flex;align-items:center;padding:0 20px;gap:28px;font-family:Inter}
-.s-chat{background:#fff;color:#0F172A}.s-chat .name{color:#7a869f}
-.foot{font-size:18px;color:#2E5BFF;border-top:1px dashed rgba(46,91,255,.35);padding-top:6px}
-.chip{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:rgba(107,158,255,.18);color:#2E5BFF}
-.s-term .chip{background:rgba(107,158,255,.2);color:#9fc0ff}
 
-#composer{position:absolute;left:980px;top:230px;width:780px;height:600px}
-#composer .inner{padding:40px 46px}
-.fl{font-size:14px;font-weight:600;letter-spacing:.2em;color:#7a869f;margin:0 0 10px}
-.field{border:1px solid rgba(15,23,42,.1);border-radius:14px;background:#fff;padding:16px 20px;font-size:27px;height:36px;margin-bottom:26px;white-space:pre;color:#0F172A}
-.field.body2{font-size:23px;color:#4a5670}
-.tags{display:flex;gap:12px;margin-bottom:30px;height:40px}
-.tag{padding:8px 18px;border-radius:999px;background:#E6F0FF;color:#2E5BFF;font-size:19px;font-weight:500}
-.buyrow{display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(15,23,42,.08);padding-top:28px}
-.buyrow .meta{font-size:19px;color:#4a5670}
-.buyrow .meta b{color:#0F172A}
-.btn{padding:18px 30px;border-radius:999px;background:#0F172A;color:#fff;font-size:21px;font-weight:600}
-#globeWrap{position:absolute;left:900px;top:150px;width:860px;height:560px}
-#stats{position:absolute;left:980px;top:740px;width:780px;display:flex;gap:20px}
-#stats .card{position:relative}
-.stat{flex:1;height:150px;padding:22px 26px;box-sizing:border-box}
-.stat .k{font-size:15px;font-weight:500;color:#7a869f}
-.stat .v{font-size:52px;font-weight:500;letter-spacing:-.03em;margin-top:10px;font-variant-numeric:tabular-nums;color:#0F172A}
-.stat .d{font-size:15px;color:#22a06b;margin-top:4px}
+/* earn */
+#payout{left:980px;top:170px;width:780px;height:330px;padding:36px 42px;box-sizing:border-box}
+.opts{display:flex;gap:12px;margin-top:22px}
+.opt{padding:12px 20px;border-radius:999px;background:#EEF4FF;color:#2E5BFF;font-size:20px;font-weight:500;white-space:nowrap}
+.opt.on{background:#0F172A;color:#fff}
+.amtRow{position:relative;height:120px;margin-top:30px}
+.amt{position:absolute;left:0;top:0;white-space:nowrap}
+.amt .v{font-size:96px;font-weight:600;letter-spacing:-.05em;background:linear-gradient(135deg,#6B9EFF,#2E5BFF 60%,#1c3fd0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.amt .u{font-size:34px;font-weight:500;color:#0F172A;margin-left:14px;letter-spacing:-.02em}
+.amt .s{font-size:19px;color:#7a869f;margin-top:-6px}
+#feed{left:980px;top:530px;width:780px;height:390px;overflow:hidden}
+#feed .hd{position:absolute;left:42px;top:28px;display:flex;align-items:center;gap:10px}
+.live{width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 6px rgba(34,197,94,.15)}
+#feedWin{position:absolute;left:0;right:0;top:74px;bottom:0;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 18%,#000 80%,transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 18%,#000 80%,transparent 100%)}
+.frow{height:70px;display:flex;align-items:center;padding:0 42px;gap:18px}
+.av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600;flex:none}
+.frow .h{font-size:22px;font-weight:500;color:#0F172A}
+.frow .via{font-size:16px;color:#8a95ab;margin-top:2px}
+.frow .amtf{margin-left:auto;font-size:22px;font-weight:600;color:#2E5BFF;font-variant-numeric:tabular-nums;white-space:nowrap}
+#crowd{position:absolute;left:160px;top:760px;display:flex;align-items:center;gap:26px}
+#crowd .stack{display:flex}
+#crowd .stack .av{width:56px;height:56px;border:3px solid #F1F6FF;margin-left:-14px;font-size:18px}
+#crowd .stack .av:first-child{margin-left:0}
+#crowd .t{font-size:22px;color:#4a5670;line-height:1.35;width:420px}
+
+/* ads previews over the sky */
+#ads{position:absolute;inset:0}
+#adsHead{position:absolute;left:120px;top:92px;color:#fff;text-shadow:0 2px 30px rgba(10,30,90,.35)}
+#adsHead .lb{font-size:17px;font-weight:600;letter-spacing:.32em;opacity:.9}
+#adsHead .hh{font-size:76px;font-weight:600;letter-spacing:-.045em;margin-top:14px;line-height:1}
+#adsHead .pp{font-size:26px;margin-top:22px;width:1180px;line-height:1.4;opacity:.95}
+.acard{position:absolute;top:390px;width:398px;height:560px;border-radius:30px;background:rgba(236,243,255,.62);border:1px solid rgba(255,255,255,.75);box-shadow:0 40px 90px rgba(20,50,140,.22);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:28px;box-sizing:border-box}
+.acard .top{display:flex;gap:16px;align-items:center}
+.acard .lg{width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:700}
+.acard .nm{font-size:23px;font-weight:600;color:#0F172A}
+.acard .bd{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;letter-spacing:.2em;color:#5b6883;border:1px solid rgba(15,23,42,.1);background:rgba(255,255,255,.6);padding:3px 9px;border-radius:6px}
+.acard .ds{font-size:19px;color:#3d4a63;margin-top:18px;height:52px;line-height:1.4}
+.art{position:relative;height:190px;border-radius:18px;margin-top:10px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.art .w{position:absolute;right:14px;top:12px;font-size:14px;color:#fff;background:rgba(0,0,0,.28);padding:5px 11px;border-radius:999px;display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums}
+.art .w i{width:8px;height:8px;border-radius:50%;background:#4ade80;display:block}
+.art .ht{position:absolute;left:22px;bottom:20px;font-size:30px;font-weight:600;color:#fff;letter-spacing:-.03em;text-shadow:0 2px 16px rgba(0,0,0,.25)}
+.art .cta{position:absolute;right:18px;bottom:22px;font-size:14px;font-weight:600;color:#0F172A;background:#fff;padding:7px 13px;border-radius:999px}
+.acard .st{display:flex;justify-content:space-between;margin-top:20px}
+.acard .st .v{font-size:36px;font-weight:500;letter-spacing:-.03em;color:#0F172A;font-variant-numeric:tabular-nums}
+.acard .st .k{font-size:16px;color:#6b7791;margin-top:2px}
+.acard .st .r{text-align:right}
+.acard .ft{display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(15,23,42,.08);margin-top:18px;padding-top:16px;font-size:16px}
+.acard .ft .lv{color:#16a34a;display:flex;align-items:center;gap:8px;font-weight:500}
+.acard .ft .lv i{width:8px;height:8px;border-radius:50%;background:#22c55e;display:block}
+.acard .mt{color:#2E5BFF;background:rgba(46,91,255,.1);padding:5px 11px;border-radius:999px;font-weight:500;white-space:nowrap}
 
 /* ---------- end card ---------- */
 #s6tx{top:330px}
@@ -107,7 +126,7 @@ canvas.layer{width:1920px;height:1080px}
 #end .tag2{font-size:64px;font-weight:600;letter-spacing:-.04em;color:var(--slate);margin-top:70px}
 #end .install{margin-top:48px;display:flex;align-items:center;gap:22px;background:#0F172A;color:#fff;padding:24px 34px;border-radius:18px;box-shadow:0 30px 70px rgba(15,23,42,.35)}
 #end .install .p{color:#6B9EFF;font-family:JBM,monospace;font-size:26px}
-#end .install .c{font-family:JBM,monospace;font-size:28px}
+#end .install .c{font-family:JBM,monospace;font-size:30px}
 #end .install .l{font-size:12px;color:#7a869f;letter-spacing:.12em;display:block;margin-bottom:4px;font-family:Inter}
 #end .url{margin-top:40px;font-size:22px;letter-spacing:.3em;color:#12203f;font-weight:500}
 #flash{background:#fff;pointer-events:none}
@@ -149,8 +168,8 @@ canvas.layer{width:1920px;height:1080px}
       <div class="word" style="font-size:62px">LATENT</div>
     </div>
     <div class="tag2">Agents deserve a bigger stage.</div>
-    <div class="install"><span class="p">&gt;_</span><span><span class="l">INSTALL</span><span class="c">npx latent-protocol@beta init</span></span></div>
-    <div class="url">LATENTMARKET.XYZ &nbsp;·&nbsp; PUBLIC BETA — LIVE NOW</div>
+    <div class="install"><span class="p">&gt;_</span><span><span class="l">INSTALL</span><span class="c">npx latent-protocol init</span></span></div>
+    <div class="url">LATENTMARKET.XYZ &nbsp;·&nbsp; LIVE NOW</div>
   </div>
 
   <!-- acts 1 & 2: terminal on black -->
@@ -177,41 +196,46 @@ canvas.layer{width:1920px;height:1080px}
   <div id="cap2" class="cap">And you’re… waiting.</div>
   <div id="cap3" class="cap">What if the wait was <em>worth something?</em></div>
 
-  <!-- act 4: developers -->
+
+  <!-- act 4: one command -->
   <div id="s4" class="layer light">
     <div class="arcs"><i style="left:-900px;top:-600px;width:2400px;height:2400px"></i><i style="left:-700px;top:-420px;width:2000px;height:2000px"></i><i style="left:-500px;top:-240px;width:1600px;height:1600px"></i></div>
-    <div class="label" id="s4l">FOR DEVELOPERS</div>
+    <div class="label" id="s4l">GET STARTED</div>
     <div class="h1" id="s4h">One command.<br>Every agent.</div>
     <div class="para" id="s4p" style="top:530px">A single sponsored line, only in idle space. Never inside your agent’s answers.</div>
-    <div class="big" id="s4big" style="top:690px"><div class="num">50%</div><div class="cap2">of the ad revenue is yours, paid in USDC on Base.</div></div>
     <div id="cli" class="dark"><div class="inner">
       <div class="lbl">TERMINAL</div>
       <div class="cli-row"><span style="color:#6B9EFF">$</span> <span id="cliTyped"></span><span id="cliCur" class="cursor" style="height:28px"></span></div>
       <div id="cliRows"></div>
     </div></div>
-    <div id="surfaces"></div>
   </div>
 
-  <!-- act 5: advertisers -->
+  <!-- act 5: earn together -->
   <div id="s5" class="layer light">
     <div class="arcs"><i style="left:900px;top:-800px;width:2400px;height:2400px"></i><i style="left:1100px;top:-600px;width:2000px;height:2000px"></i></div>
-    <div class="label" id="s5l">FOR ADVERTISERS</div>
-    <div class="h1" id="s5h">Write one line.<br>Reach every agent.</div>
-    <div class="para" id="s5p" style="top:530px">Matched to what agents are actually working on. Pay only for confirmed impressions.</div>
-    <div class="big" id="s5big" style="top:690px"><div class="num">$10</div><div class="cap2">is all it takes to launch a campaign.</div></div>
-    <div id="composer" class="card"><div class="inner">
-      <div class="fl">HEADLINE</div><div class="field" id="fTitle"></div>
-      <div class="fl">BODY</div><div class="field body2" id="fBody"></div>
-      <div class="fl">CONTEXT TAGS</div>
-      <div class="tags"><span class="tag" id="tg0">developer</span><span class="tag" id="tg1">ai</span><span class="tag" id="tg2">devtools</span></div>
-      <div class="buyrow"><div class="meta"><b>10 blocks</b> · 10,000 impressions · <b>$50 USDC</b></div><div class="btn" id="launch">Launch campaign</div></div>
-    </div></div>
-    <canvas id="globe" width="860" height="560" style="position:absolute;left:940px;top:150px"></canvas>
-    <div id="stats">
-      <div class="card stat" id="st0"><div class="k">Impressions</div><div class="v" id="v0">0</div><div class="d">▲ live</div></div>
-      <div class="card stat" id="st1"><div class="k">Clicks</div><div class="v" id="v1">0</div><div class="d">▲ live</div></div>
-      <div class="card stat" id="st2"><div class="k">CTR</div><div class="v" id="v2">0.0%</div><div class="d">▲ live</div></div>
+    <div class="label" id="s5l">EARN TOGETHER</div>
+    <div class="h1" id="s5h">Your agent works.<br>You get paid.</div>
+    <div class="para" id="s5p" style="top:530px">50% of every ad goes back to the people running agents. Take it in USDC — or as compute for the top models.</div>
+    <div id="crowd"><div class="stack" id="crowdStack"></div><div class="t">A whole network of builders, earning while their agents think.</div></div>
+    <div id="payout" class="card">
+      <div class="fl">YOUR 50% · PAY ME IN</div>
+      <div class="opts" id="opts"></div>
+      <div class="amtRow" id="amtRow"></div>
     </div>
+    <div id="feed" class="card">
+      <div class="hd"><i class="live"></i><span class="fl" style="color:#16a34a">LIVE · COMMUNITY PAYOUTS</span></div>
+      <div id="feedWin"><div id="feedList"></div></div>
+    </div>
+  </div>
+
+  <!-- act 6: ad previews over the sky -->
+  <div id="ads">
+    <div id="adsHead">
+      <div class="lb" id="adsL">FOR ADVERTISERS</div>
+      <div class="hh" id="adsH">Reach builders mid-task.</div>
+      <div class="pp" id="adsP">The highest-converting audience online: developers and power users, matched to what their agent is working on right now.</div>
+    </div>
+    <div id="cards"></div>
   </div>
 
   <div id="flash" class="layer"></div>
@@ -246,9 +270,8 @@ function cap(el, t, a, b, c, d) {
 /* ---------------- timeline (seconds) ---------------- */
 const T = {
   type1: 0.45, cps1: 32, prompt: 'refactor the auth module and add tests', think: 1.75,
-  turn: 4.2, reveal: 7.6, dev: 12.2, cliType: 12.75, cps2: 26, cliCmd: 'npx latent-protocol@beta init',
-  checks: 14.15, surf: 15.55, adv: 18.4, title: 18.95, body: 19.75, launch: 21.3, globe: 21.55,
-  close: 24.4, end: 27.1, dur: 30
+  turn: 4.2, reveal: 7.3, dev: 10.6, cliType: 11.0, cps2: 30, cliCmd: 'npx latent-protocol init',
+  checks: 12.1, earn: 13.8, ads: 18.4, close: 24.2, end: 26.9, dur: 30
 };
 
 /* ---------------- sky ---------------- */
@@ -357,55 +380,56 @@ function letters(list, t, a, step, outA, outB) {
   });
 }
 
-/* ---------------- act 4 content ---------------- */
+/* ---------------- act 4: one command ---------------- */
 const checks = [['Claude Code', 'status line + thinking line'], ['Cursor / VS Code', 'status bar'], ['Grok Build', 'status line'], ['OpenClaw', 'reply footer'], ['Hermes', 'desktop status bar'], ['Wallet', 'ready on Base']];
-$('cliRows').innerHTML = checks.map((c, i) => `<div class="cli-row" id="ck${i}"><span class="ok sym">✓</span> ${c[0].padEnd(17, ' ')}<span class="dim2">${c[1]}</span></div>`).join('');
-const AD = 'Nimbus CI — ship 3× faster';
-const surfaces = [
-  ['s-term', 'Claude Code', `<span class="chip">Sponsored</span>${AD} <span class="sym">→</span>`],
-  ['s-vsc', 'Cursor · VS Code', ``, `<span>⎇ main</span><span class="sym">◆</span><span>${AD} · Try free</span>`],
-  ['s-term', 'Grok Build', `<span class="chip">Sponsored</span>${AD} <span class="sym">→</span>`],
-  ['s-chat', 'OpenClaw', `<span class="foot"><span class="sym">◆</span> Sponsored · ${AD} — Try free</span>`],
-  ['s-chat', 'Telegram', `<span class="foot"><span class="sym">◆</span> Sponsored · ${AD} — Try free</span>`],
-  ['s-term', 'Hermes Desktop', `<span class="chip">Sponsored</span>${AD} <span class="sym">→</span>`],
-];
-$('surfaces').innerHTML = surfaces.map((s, i) => `<div class="surf ${s[0]}" id="sf${i}"><div class="name">${s[1]}</div><div class="line">${s[2]}</div>${s[3] ? `<div class="sbar">${s[3]}</div>` : ''}</div>`).join('');
+$('cliRows').innerHTML = checks.map((c, i) => `<div class="cli-row" id="ck${i}"><span class="ok sym">✓</span> ${c[0].padEnd(18, ' ')}<span class="dim2">${c[1]}</span></div>`).join('');
 
-/* ---------------- globe ---------------- */
-const gC = $('globe'), gctx = gC.getContext('2d');
-const gpts = (() => {
-  const r = mulberry32(5), pts = [];
-  const N = 1500;
-  for (let i = 0; i < N; i++) {
-    const y = 1 - (i / (N - 1)) * 2, rad = Math.sqrt(1 - y * y), th = i * 2.399963;
-    pts.push({ x: Math.cos(th) * rad, y, z: Math.sin(th) * rad, lit: r(), ph: r() * 6 });
-  }
-  return pts;
-})();
-function drawGlobe(t, lit) {
-  gctx.clearRect(0, 0, 860, 560);
-  const cx = 430, cy = 285, R = 250, rot = t * .35;
-  const halo = gctx.createRadialGradient(cx, cy, R * .6, cx, cy, R * 1.25);
-  halo.addColorStop(0, 'rgba(107,158,255,.10)'); halo.addColorStop(1, 'rgba(107,158,255,0)');
-  gctx.fillStyle = halo; gctx.fillRect(0, 0, 860, 560);
-  for (const p of gpts) {
-    const x = p.x * Math.cos(rot) + p.z * Math.sin(rot), z = -p.x * Math.sin(rot) + p.z * Math.cos(rot);
-    const tilt = .35, y = p.y * Math.cos(tilt) - z * Math.sin(tilt), zz = p.y * Math.sin(tilt) + z * Math.cos(tilt);
-    if (zz < -.15) continue;
-    const px = cx + x * R, py = cy + y * R, depth = (zz + 1) / 2;
-    const on = p.lit < lit;
-    if (on) {
-      const pulse = .5 + .5 * Math.sin(t * 5 + p.ph);
-      gctx.fillStyle = `rgba(46,91,255,${.10 * depth * pulse})`;
-      gctx.beginPath(); gctx.arc(px, py, 10 + 6 * pulse, 0, 7); gctx.fill();
-      gctx.fillStyle = `rgba(46,91,255,${.55 + .45 * depth})`;
-      gctx.beginPath(); gctx.arc(px, py, 3.4, 0, 7); gctx.fill();
-    } else {
-      gctx.fillStyle = `rgba(15,23,42,${.05 + .16 * depth})`;
-      gctx.beginPath(); gctx.arc(px, py, 1.8, 0, 7); gctx.fill();
-    }
-  }
-}
+/* ---------------- act 5: earn together ---------------- */
+const PAY = [
+  ['USDC', '24.60', 'USDC', 'Paid on Base, straight to your wallet'],
+  ['Opus 5.5', '1.2M', 'tokens', 'Opus 5.5 compute credits'],
+  ['GPT‑6 Astra', '1.4M', 'tokens', 'GPT‑6 Astra compute credits'],
+  ['Gemini', '2.1M', 'tokens', 'Gemini compute credits'],
+  ['Grok', '1.8M', 'tokens', 'Grok compute credits'],
+];
+$('opts').innerHTML = PAY.map((p, i) => `<span class="opt" id="op${i}">${p[0]}</span>`).join('');
+$('amtRow').innerHTML = PAY.map((p, i) => `<div class="amt" id="am${i}"><span class="v">${p[1]}</span><span class="u">${p[2]}</span><div class="s">${p[3]}</div></div>`).join('');
+const AVC = ['#2E5BFF', '#0f766e', '#f97316', '#7c3aed', '#db2777', '#0891b2', '#16a34a', '#ca8a04', '#475569', '#e11d48'];
+const FEED = [
+  ['MK', '@maya.dev', 'Claude Code', '+0.84 USDC'],
+  ['KJ', '@kenji_builds', 'Cursor', '+220k GPT‑6 Astra'],
+  ['LA', '@lina.ai', 'Hermes', '+310k Opus 5.5'],
+  ['RF', '@0xrafa', 'Grok Build', '+1.12 USDC'],
+  ['TC', '@tomas.codes', 'OpenClaw', '+95k Gemini'],
+  ['SN', '@sana.ships', 'Claude Code', '+0.57 USDC'],
+  ['DV', '@devika', 'Cursor', '+180k Opus 5.5'],
+  ['BO', '@bo_hacks', 'Telegram', '+140k Grok'],
+  ['EL', '@elle.eth', 'Claude Code', '+2.03 USDC'],
+  ['JP', '@jp.local', 'Hermes', '+260k GPT‑6 Astra'],
+];
+const feedRow = (f, i) => `<div class="frow"><div class="av" style="background:${AVC[i % AVC.length]}">${f[0]}</div><div><div class="h">${f[1]}</div><div class="via">via ${f[2]}</div></div><div class="amtf">${f[3]}</div></div>`;
+$('feedList').innerHTML = [...FEED, ...FEED].map(feedRow).join('');
+$('crowdStack').innerHTML = ['AK', 'MR', 'JS', 'LW', 'PT', 'ZO', 'NB'].map((s, i) => `<div class="av" style="background:${AVC[(i * 3) % AVC.length]}">${s}</div>`).join('');
+
+/* ---------------- act 6: ad previews ---------------- */
+const ADS = [
+  { n: 'Nimbus CI', c: '#2E5BFF', tag: 'DEVTOOLS', d: 'Zero-config CI for agent-built code.', h: 'Ship 3× faster', w: 128, imp: 18420, cpm: '$12.00', m: 'CI pipeline failing',
+    art: 'radial-gradient(circle at 78% 34%,rgba(255,255,255,.4) 0 46px,transparent 47px),repeating-radial-gradient(circle at 78% 34%,rgba(255,255,255,.14) 0 2px,transparent 3px 24px),linear-gradient(135deg,#131f58,#2E5BFF 60%,#8fb3ff)' },
+  { n: 'Vaultline', c: '#0f766e', tag: 'SECURITY', d: 'Automated audits before you deploy.', h: 'Audit before you ship', w: 96, imp: 12870, cpm: '$14.50', m: 'Writing Solidity',
+    art: 'repeating-linear-gradient(45deg,rgba(255,255,255,.07) 0 2px,transparent 2px 18px),radial-gradient(circle at 76% 40%,#5eead4 0,transparent 42%),linear-gradient(160deg,#042f2e,#0f766e)' },
+  { n: 'Orbit DB', c: '#ea580c', tag: 'DATABASE', d: 'Postgres that scales itself.', h: 'Scale without a DBA', w: 84, imp: 15210, cpm: '$10.00', m: 'Slow SQL queries',
+    art: 'radial-gradient(circle at 74% 42%,#fff7ed 0 24px,transparent 25px),radial-gradient(circle at 74% 42%,transparent 0 62px,rgba(255,255,255,.55) 63px 65px,transparent 66px),radial-gradient(circle at 74% 42%,transparent 0 96px,rgba(255,255,255,.3) 97px 98px,transparent 99px),linear-gradient(135deg,#7c2d12,#f97316 55%,#fdba74)' },
+  { n: 'Relay Pay', c: '#16a34a', tag: 'PAYMENTS', d: 'Stablecoin checkout in one line.', h: 'Checkout in one line', w: 71, imp: 9640, cpm: '$9.00', m: 'Building a checkout',
+    art: 'repeating-linear-gradient(-60deg,rgba(255,255,255,.14) 0 14px,transparent 14px 40px),linear-gradient(135deg,#052e16,#16a34a 60%,#bef264)' },
+];
+$('cards').innerHTML = ADS.map((a, i) => `
+  <div class="acard" id="ac${i}" style="left:${118 + i * 428}px">
+    <div class="top"><div class="lg" style="background:${a.c}">${a.n[0]}</div><div><div class="nm">${a.n}</div><div class="bd">${a.tag}</div></div></div>
+    <div class="ds">${a.d}</div>
+    <div class="art" style="background:${a.art}"><div class="w"><i></i><span id="aw${i}">${a.w}</span> watching</div><div class="ht">${a.h}</div></div>
+    <div class="st"><div><div class="v" id="ai${i}">0</div><div class="k">Impressions</div></div><div class="r"><div class="v">${a.cpm}</div><div class="k">eCPM</div></div></div>
+    <div class="ft"><span class="lv"><i></i>Live</span><span class="mt" id="am_${i}">Matched: ${a.m}</span></div>
+  </div>`).join('');
 
 /* ---------------- grain ---------------- */
 const grC = $('grain'), grx = grC.getContext('2d');
@@ -457,86 +481,95 @@ function render(t) {
   show($('floatUp'), fl > 0 ? Math.sin(fl * Math.PI) : 0, `translateY(${(-fl * 70).toFixed(1)}px)`);
   cap($('cap1'), t, 1.95, 2.4, 2.95, 3.25);
   cap($('cap2'), t, 3.2, 3.6, 4.05, 4.3);
-  cap($('cap3'), t, 5.05, 5.6, 7.2, 7.7);
+  cap($('cap3'), t, 5.0, 5.5, 6.85, 7.25);
 
-  // ---------- sky world: act 3 + act 6 ----------
+  // ---------- sky world ----------
   const skyVis = t >= T.reveal - .1;
-  const z3 = lerp(1.35, 1, eo(k(t, T.reveal, T.dev)));
-  const z6 = lerp(1.18, 1.02, eo(k(t, T.close, T.dur)));
-  const inClose = t >= T.close - .2;
-  if (skyVis) { drawSky(t, inClose ? z6 : z3); }
+  const z = t < T.ads ? lerp(1.35, 1, eo(k(t, T.reveal, T.dev))) : lerp(1.08, 1, eo(k(t, T.ads, T.dur)));
+  if (skyVis) drawSky(t, z);
   skyC.style.visibility = skyVis ? 'visible' : 'hidden';
-  const open = inClose ? eio(k(t, T.close - .1, T.close + 2.4)) : eio(k(t, T.reveal + .2, T.reveal + 3.2));
-  if (skyVis) drawCurtains(t, open);
+  if (skyVis) drawCurtains(t, eio(k(t, T.reveal + .2, T.reveal + 3.2)));
   curC.style.visibility = skyVis ? 'visible' : 'hidden';
-  // monument rises
-  const mRise = inClose ? eo(k(t, T.close, T.close + 2.2)) : eo(k(t, 10.2, 12.0));
-  const mx = inClose ? -60 : 0;
-  show($('monument'), skyVis ? Math.min(1, mRise * 1.4) : 0, `translate(${mx}px,${((1 - mRise) * 260).toFixed(1)}px)`);
-  // act 3 text
-  $('stage3tx').style.visibility = t > 8.5 && t < 11 ? 'visible' : 'hidden';
-  letters(s3letters, t, 8.75, .035, 10.25, 10.75);
-  const lk = eo(k(t, 10.55, 11.35));
-  show($('lockup'), t < T.close ? Math.min(lk, 1 - eio(k(t, 11.9, 12.3))) : 0, `translateY(${((1 - lk) * 20).toFixed(1)}px) scale(${lerp(1.04, 1, lk).toFixed(4)})`, (1 - lk) * 10);
-  // act 6 text + end card
-  $('s6tx').style.visibility = t > 24.8 && t < 27.4 ? 'visible' : 'hidden';
-  letters(s6letters, t, 25.05, .03, 26.75, 27.25);
+  const inClose = t >= T.close - .2;
+  const mRise = inClose ? eo(k(t, T.close, T.close + 2)) : eo(k(t, 8.6, 10.4));
+  const mVis = skyVis && (t < T.dev + .5 || inClose);
+  show($('monument'), mVis ? Math.min(1, mRise * 1.4) : 0, `translate(${inClose ? -60 : 0}px,${((1 - mRise) * 260).toFixed(1)}px)`);
+  $('stage3tx').style.visibility = t > 7.8 && t < T.dev + .2 ? 'visible' : 'hidden';
+  letters(s3letters, t, 7.95, .035, T.dev - .3, T.dev);
+  const lk = eo(k(t, 8.9, 9.7));
+  show($('lockup'), t < T.dev + .3 ? lk : 0, `translateY(${((1 - lk) * 20).toFixed(1)}px) scale(${lerp(1.04, 1, lk).toFixed(4)})`, (1 - lk) * 10);
+  $('s6tx').style.visibility = t > T.close + .2 && t < T.end + .4 ? 'visible' : 'hidden';
+  letters(s6letters, t, T.close + .4, .03, T.end - .45, T.end);
   const en = eo(k(t, T.end, T.end + .9));
   show($('end'), en, `translateY(${((1 - en) * 26).toFixed(1)}px)`, (1 - en) * 12);
 
-  // ---------- act 4: developers ----------
-  const s4in = eo(k(t, T.dev, T.dev + .6)), s4out = eio(k(t, T.adv + .15, T.adv + .55));
-  show($('s4'), Math.min(s4in, 1 - s4out), `translateX(${(-s4out * 120).toFixed(1)}px)`);
-  if (t > T.dev - .1 && t < T.adv + .6) {
-    const e = (a, d = .6) => eo(k(t, a, a + d));
-    show($('s4l'), e(T.dev + .15), `translateY(${((1 - e(T.dev + .15)) * 16).toFixed(1)}px)`);
-    show($('s4h'), e(T.dev + .25, .8), `translateY(${((1 - e(T.dev + .25, .8)) * 30).toFixed(1)}px)`, (1 - e(T.dev + .25, .8)) * 8);
-    show($('s4p'), e(T.dev + .55), `translateY(${((1 - e(T.dev + .55)) * 20).toFixed(1)}px)`);
-    const bg = e(T.surf + .5, .8);
-    show($('s4big'), bg, `translateY(${((1 - bg) * 30).toFixed(1)}px)`, (1 - bg) * 10);
-    // CLI card, then surfaces
-    const cliIn = e(T.dev + .3, .7), cliOut = eio(k(t, T.surf - .25, T.surf + .2));
-    show($('cli'), Math.min(cliIn, 1 - cliOut), `translateY(${((1 - cliIn) * 40 - cliOut * 60).toFixed(1)}px) scale(${lerp(1, .96, cliOut).toFixed(4)})`, cliOut * 8);
+  const e = (a, d = .6) => eo(k(t, a, a + d));
+  const rise = (el, a, d = .6, dy = 24, b = 8) => { const x = e(a, d); show(el, x, `translateY(${((1 - x) * dy).toFixed(1)}px)`, (1 - x) * b); };
+
+  // ---------- act 4: one command ----------
+  const s4v = t > T.dev - .1 && t < T.earn + .6;
+  show($('s4'), s4v ? e(T.dev, .5) : 0);
+  if (s4v) {
+    rise($('s4l'), T.dev + .1, .6, 16, 0);
+    rise($('s4h'), T.dev + .2, .8, 30);
+    rise($('s4p'), T.dev + .5, .6, 20, 0);
+    const cliIn = e(T.dev + .25, .7);
+    show($('cli'), cliIn, `translateY(${((1 - cliIn) * 40).toFixed(1)}px)`);
     $('cliTyped').textContent = typed(T.cliCmd, t, T.cliType, T.cps2);
-    $('cliCur').style.visibility = t < 13.95 && (t < T.cliType + T.cliCmd.length / T.cps2 || Math.floor(t * 2.2) % 2 === 0) ? 'visible' : 'hidden';
-    checks.forEach((_, i) => { const x = e(T.checks + i * .2, .3); show($('ck' + i), x, `translateX(${((1 - x) * -14).toFixed(1)}px)`); });
-    surfaces.forEach((_, i) => { const x = e(T.surf + .1 + i * .17, .55); show($('sf' + i), x, `translateY(${((1 - x) * 40).toFixed(1)}px)`, (1 - x) * 6); });
+    const doneTyping = T.cliType + T.cliCmd.length / T.cps2;
+    $('cliCur').style.visibility = t < doneTyping + .15 && (t < doneTyping || Math.floor(t * 2.2) % 2 === 0) ? 'visible' : 'hidden';
+    checks.forEach((_, i) => { const x = e(T.checks + i * .16, .3); show($('ck' + i), x, `translateX(${((1 - x) * -14).toFixed(1)}px)`); });
   }
 
-  // ---------- act 5: advertisers ----------
-  const s5in = eo(k(t, T.adv - .3, T.adv + .2)), s5out = eio(k(t, T.close - .3, T.close + .2));
-  show($('s5'), Math.min(s5in, 1 - s5out), `translateX(${((1 - s5in) * 120).toFixed(1)}px)`);
-  if (t > T.adv - .35 && t < T.close + .3) {
-    const e = (a, d = .6) => eo(k(t, a, a + d));
-    show($('s5l'), e(T.adv + .1), `translateY(${((1 - e(T.adv + .1)) * 16).toFixed(1)}px)`);
-    show($('s5h'), e(T.adv + .2, .8), `translateY(${((1 - e(T.adv + .2, .8)) * 30).toFixed(1)}px)`, (1 - e(T.adv + .2, .8)) * 8);
-    show($('s5p'), e(T.adv + .5), `translateY(${((1 - e(T.adv + .5)) * 20).toFixed(1)}px)`);
-    const bg = e(T.globe + .6, .8);
-    show($('s5big'), bg, `translateY(${((1 - bg) * 30).toFixed(1)}px)`, (1 - bg) * 10);
-    const cIn = e(T.adv + .25, .7), cOut = eio(k(t, T.globe - .2, T.globe + .25));
-    show($('composer'), Math.min(cIn, 1 - cOut), `translateY(${((1 - cIn) * 40 - cOut * 60).toFixed(1)}px) scale(${lerp(1, .96, cOut).toFixed(4)})`, cOut * 8);
-    $('fTitle').textContent = typed('Nimbus CI — ship 3× faster', t, T.title, 34);
-    $('fBody').textContent = typed('Zero-config pipelines for agent-built code.', t, T.body, 46);
-    [0, 1, 2].forEach(i => { const x = eox(k(t, 20.75 + i * .1, 21.05 + i * .1)); show($('tg' + i), x, `scale(${lerp(.6, 1, x).toFixed(3)})`); });
-    const press = Math.sin(k(t, T.launch, T.launch + .22) * Math.PI);
-    $('launch').style.transform = `scale(${(1 - press * .07).toFixed(3)})`;
-    $('launch').style.background = t > T.launch + .1 ? '#2E5BFF' : '#0F172A';
-    $('launch').textContent = t > T.launch + .1 ? 'Live ✓' : 'Launch campaign';
-    const gIn = e(T.globe, .8);
-    show(gC, gIn, `scale(${lerp(.9, 1, gIn).toFixed(4)})`);
-    if (gIn > 0) drawGlobe(t, .005 + .16 * eio(k(t, T.globe + .2, T.close - .4)));
-    const sp = eio(k(t, T.globe + .4, T.close - .5));
-    [0, 1, 2].forEach(i => { const x = e(T.globe + .3 + i * .12, .6); show($('st' + i), x, `translateY(${((1 - x) * 30).toFixed(1)}px)`); });
-    $('v0').textContent = fmt(2000 * sp);
-    $('v1').textContent = fmt(56 * sp);
-    $('v2').textContent = (2.8 * sp).toFixed(1) + '%';
+  // ---------- act 5: earn together ----------
+  const s5v = t > T.earn - .15 && t < T.ads + .4;
+  const s5in = e(T.earn - .1, .5), s5out = eio(k(t, T.ads - .2, T.ads + .3));
+  show($('s5'), s5v ? Math.min(s5in, 1 - s5out) : 0, `translateX(${((1 - s5in) * 120).toFixed(1)}px) scale(${lerp(1, 1.04, s5out).toFixed(4)})`, s5out * 10);
+  if (s5v) {
+    rise($('s5l'), T.earn + .1, .6, 16, 0);
+    rise($('s5h'), T.earn + .2, .8, 30);
+    rise($('s5p'), T.earn + .5, .6, 20, 0);
+    rise($('crowd'), T.earn + 1.5, .7, 20, 6);
+    [...$('crowdStack').children].forEach((a, i) => { const x = eox(k(t, T.earn + 1.5 + i * .08, T.earn + 1.9 + i * .08)); a.style.transform = `scale(${lerp(.4, 1, x).toFixed(3)})`; a.style.opacity = x; });
+    rise($('payout'), T.earn + .2, .7, 40, 6);
+    rise($('feed'), T.earn + .4, .7, 40, 6);
+    const c0 = T.earn + 1.0, step = .62;
+    const idx = clamp(Math.floor((t - c0) / step), 0, PAY.length - 1);
+    PAY.forEach((_, i) => {
+      $('op' + i).className = 'opt' + (i === idx ? ' on' : '');
+      const s = c0 + i * step;
+      let o = 0, dy = 0;
+      if (i === idx) { o = eo(k(t, s, s + .25)); dy = (1 - o) * 26; if (i === 0) o = Math.min(o, e(T.earn + .5, .5)); }
+      else if (i === idx - 1) { const x = k(t, c0 + idx * step, c0 + idx * step + .2); o = 1 - x; dy = -x * 26; }
+      if (i === 0 && t < c0) { o = e(T.earn + .5, .5); dy = 0; }
+      show($('am' + i), o, `translateY(${dy.toFixed(1)}px)`, (1 - o) * 6);
+    });
+    const loop = FEED.length * 70;
+    $('feedList').style.transform = `translateY(${(-(((t - T.earn) * 95) % loop)).toFixed(1)}px)`;
+  }
+
+  // ---------- act 6: ad previews over the sky ----------
+  const adsV = t > T.ads - .2 && t < T.close + .5;
+  $('ads').style.display = adsV ? 'block' : 'none';
+  if (adsV) {
+    const out = (i = 0) => eio(k(t, T.close - .35 + i * .05, T.close + .1 + i * .05));
+    [['adsL', .1], ['adsH', .2], ['adsP', .45]].forEach(([id, d]) => { const x = e(T.ads + d, .7); const o = out(); show($(id), x * (1 - o), `translateY(${((1 - x) * 24 - o * 20).toFixed(1)}px)`, (1 - x) * 8 + o * 8); });
+    const sp = eio(k(t, T.ads + .8, T.close - .3));
+    ADS.forEach((a, i) => {
+      const x = e(T.ads + .45 + i * .16, .8), o = out(i);
+      show($('ac' + i), x * (1 - o), `translateY(${((1 - x) * 110 + o * 60).toFixed(1)}px) rotate(${((1 - x) * (i - 1.5) * 2).toFixed(2)}deg)`, (1 - x) * 6 + o * 8);
+      $('ai' + i).textContent = fmt(a.imp * lerp(.62, 1, sp));
+      $('aw' + i).textContent = a.w + Math.round(Math.sin(t * 2.3 + i * 1.7) * 3 + sp * 6);
+      const p = Math.sin(k(t, T.ads + 2.0 + i * .3, T.ads + 2.45 + i * .3) * Math.PI);
+      const m = $('am_' + i);
+      m.style.transform = `scale(${(1 + p * .1).toFixed(3)})`;
+      m.style.background = `rgba(46,91,255,${(.1 + p * .9).toFixed(3)})`;
+      m.style.color = p > .5 ? '#fff' : '#2E5BFF';
+    });
   }
 
   // ---------- flashes, vignette, grain ----------
-  const fl1 = Math.max(0, 1 - Math.abs(t - T.dev) / .35) * .9;
-  const fl2 = Math.max(0, 1 - Math.abs(t - T.close) / .45) * .85;
-  const fl3 = eio(k(t, T.dur - .35, T.dur)) * 0; // hold end card
-  show($('flash'), Math.max(fl1, fl2, fl3));
+  show($('flash'), Math.max(0, 1 - Math.abs(t - T.dev) / .35) * .9);
   $('vign').style.opacity = (t < T.reveal + 1.2 ? 1 : .25).toString();
   grx.putImageData(grainFrames[Math.floor(t * 24) % grainFrames.length], 0, 0);
 }

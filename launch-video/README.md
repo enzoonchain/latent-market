@@ -6,13 +6,14 @@ deterministic `render(t)` function, so edits are just HTML/CSS/JS.
 | Time | Beat |
 |------|------|
 | 0–4s | Terminal on black: prompt typed, agent "thinking", *Your agent is thinking. / And you're… waiting.* |
-| 4–7.5s | Idle status line turns into a sponsored line, `+0.0025 USDC` lands. *What if the wait was worth something?* |
-| 7.5–12s | Pull back through the curtains into the sky: *AGENTS DESERVE A BIGGER STAGE.* → LATENT lockup, monument rises |
-| 12–18s | Developers: `npx latent-protocol@beta init`, detected agents, the line on every surface, **50%** revenue share |
-| 18–24s | Advertisers: write one line, tags, launch; globe lights up, live stats, **$10** minimum campaign |
+| 4–7s | Idle status line turns into a sponsored line, `+0.0025 USDC` lands. *What if the wait was worth something?* |
+| 7–10.5s | Pull back through the curtains into the sky: *AGENTS DESERVE A BIGGER STAGE.* + LATENT lockup, monument rises |
+| 10.5–14s | *One command. Every agent.* — `npx latent-protocol init` detects every agent |
+| 14–18.5s | *Your agent works. You get paid.* — 50% payout in USDC or compute (Opus 5.5, GPT‑6 Astra, Gemini, Grok), live community payouts feed |
+| 18.5–24s | Advertisers over the sky: *Reach builders mid-task.* — ad preview cards, live impressions, context matching |
 | 24–30s | *REAL AGENTS. REAL ATTENTION.* → end card with install command and latentmarket.xyz |
 
-Ads shown are for a fictional brand (Nimbus CI).
+Advertisers (Nimbus CI, Vaultline, Orbit DB, Relay Pay), user handles and all figures are fictional and illustrative.
 
 ## Preview
 

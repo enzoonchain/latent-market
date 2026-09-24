@@ -123,49 +123,47 @@ add(blip(midi(98)), 5.08, .10, .4)
 add(blip(midi(93)), 6.3, .08, .4)
 
 # --- Act 3: reveal ---
-add(whoosh(1.8), 7.2, .5)
-pad([50, 57, 62, 66, 69, 73], 7.6, 4.8, .5)          # D maj9
-add(chime(midi(74), 4.0), 10.55, .18)
-add(chime(midi(81), 4.0), 10.62, .1, .3)
+add(whoosh(1.8), 6.9, .5)
+pad([50, 57, 62, 66, 69, 73], 7.3, 3.8, .5)          # D maj9
+add(chime(midi(74), 4.0), 8.9, .18)
+add(chime(midi(81), 4.0), 8.97, .1, .3)
 
-# --- Act 4 / 5: product ---
-add(whoosh(.9), 11.8, .35)
-pad([47, 54, 59, 62, 66, 69], 12.2, 3.4, .42)        # Bm9
-pad([43, 50, 55, 59, 62, 66, 69], 15.4, 3.3, .42)    # Gmaj9
-pad([45, 52, 57, 61, 64, 71], 18.4, 3.2, .42)        # A add9
-pad([50, 57, 62, 66, 69, 73], 21.4, 3.3, .42)        # D maj9
+# --- Act 4-6: one command, earn, ads ---
+add(whoosh(.9), 10.2, .35)
+pad([47, 54, 59, 62, 66, 69], 10.6, 3.4, .42)        # Bm9
+pad([43, 50, 55, 59, 62, 66, 69], 13.8, 4.8, .42)    # Gmaj9
+pad([45, 52, 57, 61, 64, 71], 18.4, 3.0, .42)        # A add9
+pad([50, 57, 62, 66, 69, 73], 21.2, 3.2, .42)        # D maj9
 arp = [74, 78, 81, 85, 81, 78]
 beat = 60 / 100 / 2
-t0 = 12.2
+t0 = 10.6
 i = 0
-while t0 < 24.2:
-    pluck(arp[i % len(arp)] - (5 if 15.4 <= t0 < 18.4 else 0), t0, .06, (-.4, .4)[i % 2])
+while t0 < 24.0:
+    pluck(arp[i % len(arp)] - (5 if 13.8 <= t0 < 18.4 else 0), t0, .06, (-.4, .4)[i % 2])
     t0 += beat
     i += 1
-cmd = 'npx latent-protocol@beta init'
+cmd = 'npx latent-protocol init'
 for j, _ in enumerate(cmd):
-    add(key(), 12.75 + j / 26, .3, .2)
-add(key(), 13.95, .5)
+    add(key(), 11.0 + j / 30, .3, .2)
+add(key(), 11.9, .5)
 for j in range(6):
-    add(blip(midi(88 + (j % 3) * 2), .15), 14.15 + j * .2, .07, .3)
-for j in range(6):
-    add(blip(midi(81 + j * 2), .2), 15.65 + j * .17, .06, -.3)
-for j, _ in enumerate('Nimbus CI — ship 3× faster'):
-    add(key(), 18.95 + j / 34, .22, .2)
-for j, _ in enumerate('Zero-config pipelines for agent-built code.'):
-    add(key(), 19.75 + j / 46, .18, .2)
-add(key(), 21.3, .7)
-add(chime(midi(90), 2.0), 21.4, .14)
-for j in range(10):
-    add(blip(midi(86 + (j * 5) % 12), .2), 21.8 + j * .22, .04, rng.uniform(-.6, .6))
+    add(blip(midi(88 + (j % 3) * 2), .15), 12.1 + j * .16, .07, .3)
+for j in range(5):  # payout option switches
+    add(blip(midi(86 + j * 2), .22), 14.8 + j * .62, .09, -.2)
+for j in range(8):  # community payouts ticking in
+    add(blip(midi(93 + (j % 2) * 5), .12), 14.3 + j * .5, .045, .5)
+add(whoosh(1.0), 18.0, .35)
+for j in range(4):  # ad cards land, then "matched" pops
+    add(blip(midi(81 + j * 2), .2), 18.85 + j * .16, .07, -.4 + j * .27)
+    add(blip(midi(93 + j), .18), 20.4 + j * .3, .08, -.4 + j * .27)
 
-# --- Act 6: close ---
-add(whoosh(1.6), 23.9, .5)
-pad([38, 50, 57, 62, 66, 69, 76], 24.4, 5.6, .55)    # D maj9 wide
-add(chime(midi(86), 4.0), 27.1, .2)
-add(chime(midi(93), 4.0), 27.18, .12, .3)
+# --- close ---
+add(whoosh(1.6), 23.7, .5)
+pad([38, 50, 57, 62, 66, 69, 76], 24.2, 5.8, .55)    # D maj9 wide
+add(chime(midi(86), 4.0), 26.9, .2)
+add(chime(midi(93), 4.0), 26.98, .12, .3)
 sub = np.sin(2 * np.pi * 36.7 * np.arange(int(5 * SR)) / SR) * env(int(5 * SR), .4, 2.5)
-add(sub, 24.4, .18)
+add(sub, 24.2, .18)
 
 # master: fade in/out, soft clip, normalise
 fade = np.ones(N)
