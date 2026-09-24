@@ -42,7 +42,6 @@ let statusFocusSub: vscode.Disposable | null = null;
 function trackWindowFocus(tracker: ViewabilityTracker): vscode.Disposable {
   return vscode.window.onDidChangeWindowState((s) => (s.focused ? tracker.viewable() : tracker.hidden()));
 }
-let reassertTimer: ReturnType<typeof setInterval> | null = null;
 const userRestored = new Set<AgentKind>();
 let category: Category = "general";
 
@@ -304,13 +303,6 @@ const BUILD_ACK = "latent.cursorBuildAck";
 let toldOverlayReload = false;
 let overlayAhead = false;
 
-function stopReassert(): void {
-  if (reassertTimer) {
-    clearInterval(reassertTimer);
-    reassertTimer = null;
-  }
-}
-
 function reassertSurfaces(context: vscode.ExtensionContext): void {
   const cur = loadConfig();
   if (!cur.enabled || !policiesOk(context) || !loopback) return;
@@ -336,12 +328,6 @@ function reassertSurfaces(context: vscode.ExtensionContext): void {
   } else {
     earningsBar?.setStale(false);
   }
-}
-
-function startReassert(context: vscode.ExtensionContext): void {
-  if (reassertTimer) return;
-  reassertTimer = setInterval(() => reassertSurfaces(context), 60_000);
-  context.subscriptions.push({ dispose: () => stopReassert() });
 }
 
 function restoreAll(announce: boolean, only?: AgentKind): void {
@@ -451,7 +437,6 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
     else patchClaudeHostCsp(b.extDir);
   }
   syncCursorOverlay(false);
-  startReassert(context);
   reassertSurfaces(context);
 }
 
@@ -468,7 +453,6 @@ function stopDisplay(): void {
   copyItem = null;
   loopback?.stop();
   loopback = null;
-  stopReassert();
 }
 
 async function onPanelMessage(context: vscode.ExtensionContext, msg: PanelMessage): Promise<void> {
