@@ -10,6 +10,7 @@
  */
 export const MARK_START = "/* LATENT-START */";
 export const MARK_END = "/* LATENT-END */";
+export const BLOCK_BUILD = "0.5.8";
 
 export function buildBlock(baseUrl: string, rotateSeconds: number, category: string): string {
   const cfg = JSON.stringify({ base: baseUrl, rotate: rotateSeconds * 1000, cat: category });
@@ -23,27 +24,37 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
 (function(){
   try {
     if (window.__latentActive) return; window.__latentActive = true;
+    var LATENT_BUILD = "${BLOCK_BUILD}";
     var CFG = ${cfg};
     var PANE = Math.random().toString(16).slice(2, 10);
     var MIN_VIEW_MS = 10000, TICK_MS = 2500;
     var cur = null, viewing = false, viewSince = 0, cumMs = 0, billed = false, serverCredited = false, tickAt = 0, viewableSent = false;
-    function isSpinnerRow(el){
+    function tokenStarts(el, prefix){
       var cl = el && el.classList;
       if (!cl) return false;
-      for (var i = 0; i < cl.length; i++) if (cl[i].indexOf("spinnerRow_") === 0) return true;
+      for (var i = 0; i < cl.length; i++) if (cl[i].indexOf(prefix) === 0) return true;
       return false;
     }
-    // Read-only. The last non-empty spinnerRow_ is the live thinking row.
-    // Never write into it: Claude Code's React tree tears the row out and
-    // re-renders forever if a child, style, or innerHTML changes.
-    function spinner(){
-      var els = document.querySelectorAll('[class*="spinnerRow_"]');
+    function lastMatch(selector, accept){
+      var els = document.querySelectorAll(selector);
       var last = null;
       for (var i = 0; i < els.length; i++) {
-        if (!isSpinnerRow(els[i])) continue;
-        if ((els[i].textContent || "").replace(/\\s/g, "") !== "") last = els[i];
+        if (accept && !accept(els[i])) continue;
+        if (els[i].offsetParent === null && els[i] !== document.body) continue;
+        last = els[i];
       }
       return last;
+    }
+    // Read-only. Claude's live row is spinnerRow_; Codex's live row is the
+    // thinking shimmer (the hashed class still contains cadencedShimmer).
+    // Never write into either: React tears the row out if a child changes.
+    function spinner(){
+      return lastMatch('[class*="spinnerRow_"]', function(el){
+          return tokenStarts(el, "spinnerRow_") && (el.textContent || "").replace(/\\s/g, "") !== "";
+        })
+        || lastMatch('[class*="statusRow_"]', function(el){ return tokenStarts(el, "statusRow_"); })
+        || lastMatch('[class*="cadencedShimmer"]', null)
+        || document.querySelector('[data-latent-spinner]');
     }
     function busy(){ var s = spinner(); return !!(s && s.offsetParent !== null); }
     function visible(){ return document.visibilityState === 'visible'; }
@@ -121,7 +132,7 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       if(overlay && overlay.parentNode) return overlay;
       overlay = document.createElement('div');
       overlay.setAttribute('data-latent-row','1');
-      overlay.style.cssText = 'position:fixed;z-index:2147483000;display:none;align-items:center;gap:6px;padding:0 8px;box-sizing:border-box;overflow:hidden;pointer-events:auto;background:var(--vscode-editor-background,#1e1e1e);color:inherit;';
+      overlay.style.cssText = 'position:fixed;z-index:2147483000;display:none;align-items:center;gap:6px;padding:0 8px;box-sizing:border-box;overflow:hidden;pointer-events:auto;background:transparent;color:inherit;';
       var img = document.createElement('img');
       img.setAttribute('data-latent-favicon','1');
       img.alt = '';
@@ -151,9 +162,9 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       if(!r || (!r.width && !r.height)){ hideOverlay(); return; }
       overlay.style.display = 'inline-flex';
       overlay.style.left = r.left + 'px';
-      overlay.style.top = r.top + 'px';
-      overlay.style.width = r.width + 'px';
-      overlay.style.height = Math.max(r.height, 18) + 'px';
+      overlay.style.top = (r.bottom + 2) + 'px';
+      overlay.style.width = Math.max(r.width, 280) + 'px';
+      overlay.style.height = '22px';
     }
     function paint(){
       var s = spinner(); if(!s || !cur){ hideOverlay(); return; }

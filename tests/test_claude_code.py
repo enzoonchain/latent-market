@@ -111,19 +111,40 @@ def test_refetches_after_rotation_window(env, monkeypatch):
     assert tracker.log_impression.call_count == 2
 
 
-def test_overnight_reopen_caps_dwell_and_checks_the_session_first(env, monkeypatch):
-    """A 2s view closed overnight must not bill a day of cache age."""
+def test_two_second_view_is_dropped_on_reopen(env, monkeypatch):
+    """Closed before the view floor: that impression is not billed."""
     _client, tracker = env
     monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
-    cc.render({"session_id": "s1"})
-    cache = json.loads(cc._CACHE_FILE.read_text())
-    cache["fetched_at"] = 1_000.0
-    cache["shown_at_ms"] = 1_000_000
-    cc._CACHE_FILE.write_text(json.dumps(cache))
+    cc._CACHE_FILE.write_text(json.dumps({
+        "ad": FAKE_AD,
+        "fetched_at": 1_000.0,
+        "shown_at_ms": 1_000_000,
+        "last_seen_ms": 1_002_000,
+        "session_id": "s1",
+        "billed": False,
+        "event_uuid": "evt-short",
+    }))
+    monkeypatch.setattr(cc.time, "time", lambda: 1_000.0 + 86_400)
+    cc.render({"session_id": "other-session"})
+    tracker.log_impression.assert_not_called()
+
+
+def test_reopen_bills_the_last_poll_not_the_gap(env, monkeypatch):
+    _client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    cc._CACHE_FILE.write_text(json.dumps({
+        "ad": FAKE_AD,
+        "fetched_at": 1_000.0,
+        "shown_at_ms": 1_000_000,
+        "last_seen_ms": 1_015_000,
+        "session_id": "s1",
+        "billed": False,
+        "event_uuid": "evt-long",
+    }))
     monkeypatch.setattr(cc.time, "time", lambda: 1_000.0 + 86_400)
     cc.render({"session_id": "other-session"})
     tracker.log_impression.assert_called_once()
-    assert tracker.log_impression.call_args.kwargs["displayed_ms"] == cc._MAX_DISPLAY_MS
+    assert tracker.log_impression.call_args.kwargs["displayed_ms"] == 15_000
 
 
 def test_unshown_cache_is_not_billed(env, monkeypatch):

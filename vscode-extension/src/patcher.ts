@@ -13,7 +13,7 @@
  * from the webview bundle (see CSP_META_ANCHOR), so both get patched. It is off
  * by default and gated behind an explicit command / setting.
  */
-import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { MARK_START, MARK_END } from "./block.js";
@@ -134,16 +134,63 @@ export function claudeBundle(extDir: string): Pick<AgentBundle, "bundlePath" | "
   const bundlePath = join(extDir, "webview", "index.js");
   if (!existsSync(bundlePath)) return null;
   const host = join(extDir, "extension.js");
-  let cspHostPath: string | null = null;
-  try {
-    if (existsSync(host) && readFileSync(host, "utf8").includes(CSP_META_ANCHOR)) cspHostPath = host;
-  } catch {
-    cspHostPath = null;
+  return { bundlePath, cspHostPath: existsSync(host) ? host : null };
+}
+
+const TAIL_BYTES = 64 * 1024;
+let bundleCache: { stamp: string; bundles: AgentBundle[] } | null = null;
+
+function discoveryStamp(): string {
+  const parts: string[] = [];
+  for (const root of extensionRoots()) {
+    let names: string[] = [];
+    try {
+      names = readdirSync(root);
+    } catch {
+      continue;
+    }
+    parts.push(root + "\0" + names.filter((n) => agentFor(n)).sort().join("\0"));
   }
-  return { bundlePath, cspHostPath };
+  return parts.join("\n");
+}
+
+export function fileStamp(path: string): { mtimeMs: number; size: number } | null {
+  try {
+    const st = statSync(path);
+    return { mtimeMs: st.mtimeMs, size: st.size };
+  } catch {
+    return null;
+  }
+}
+
+/** The sponsor block is appended, so the marker lives in the tail. */
+export function tailIncludes(path: string, needle: string): boolean {
+  let fd: number | null = null;
+  try {
+    const st = statSync(path);
+    const len = Math.min(st.size, TAIL_BYTES);
+    const buf = Buffer.alloc(len);
+    fd = openSync(path, "r");
+    readSync(fd, buf, 0, len, Math.max(0, st.size - len));
+    return buf.toString("utf8").includes(needle);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
 }
 
 export function findAgentBundles(): AgentBundle[] {
+  const stamp = discoveryStamp();
+  if (bundleCache?.stamp === stamp && bundleCache.bundles.every((b) => existsSync(b.bundlePath))) {
+    return bundleCache.bundles;
+  }
+  const bundles = locateAgentBundles();
+  bundleCache = { stamp, bundles };
+  return bundles;
+}
+
+function locateAgentBundles(): AgentBundle[] {
   const out: AgentBundle[] = [];
   const seen = new Set<AgentKind>();
   for (const root of extensionRoots()) {
@@ -177,11 +224,7 @@ export function findAgentBundles(): AgentBundle[] {
 }
 
 export function isPatched(bundlePath: string): boolean {
-  try {
-    return readFileSync(bundlePath, "utf8").includes(MARK_START);
-  } catch {
-    return false;
-  }
+  return tailIncludes(bundlePath, MARK_START);
 }
 
 /** Add a 127.0.0.1 loopback allowance to any CSP connect-src in the bundle. */

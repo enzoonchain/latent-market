@@ -43,11 +43,13 @@ _CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
 _DEFAULT_ROTATE_SECONDS = 30
 _DEFAULT_REFRESH_INTERVAL = 30
-# Bill only after the line has actually been on screen this long. Dwell starts
-# at first render (shown_at_ms), not at fetch time, and never exceeds
-# _MAX_DISPLAY_MS — a later process must not bill a day of cache age.
+# Bill only after the line has actually been on screen this long. Dwell is
+# last_seen_ms - shown_at_ms. A poll more than _CONTINUITY_MS after the last
+# one means the line was closed; that gap is not on-screen time. Under
+# _MIN_BILL_SECONDS the impression is dropped.
 _MIN_BILL_SECONDS = 10
 _MAX_DISPLAY_MS = 600_000
+_CONTINUITY_MS = 180_000
 
 
 # ── Rendering ────────────────────────────────────────────────────────────────
@@ -185,25 +187,36 @@ def _now_ms(now: float) -> int:
     return int(now * 1000)
 
 
-def _elapsed_ms(cache: dict, now_ms: int) -> int:
+def _note_seen(cache: dict, now_ms: int) -> None:
+    """Advance last_seen_ms only while polls are still continuous."""
     shown = cache.get("shown_at_ms")
     if not isinstance(shown, (int, float)):
+        return
+    seen = cache.get("last_seen_ms")
+    seen_ms = int(seen) if isinstance(seen, (int, float)) else int(shown)
+    if now_ms - seen_ms <= _CONTINUITY_MS:
+        cache["last_seen_ms"] = now_ms
+
+
+def _elapsed_ms(cache: dict) -> int:
+    shown = cache.get("shown_at_ms")
+    seen = cache.get("last_seen_ms")
+    if not isinstance(shown, (int, float)) or not isinstance(seen, (int, float)):
         return 0
-    return max(0, min(now_ms - int(shown), _MAX_DISPLAY_MS))
+    return max(0, min(int(seen) - int(shown), _MAX_DISPLAY_MS))
 
 
-def _bill_cached(cache: dict, now_ms: int, config: Config, *, force: bool = False) -> None:
-    """Credit a line this process actually rendered.
+def _bill_cached(cache: dict, config: Config) -> None:
+    """Credit a line that was on screen for at least the view floor.
 
-    ``shown_at_ms`` is set on first display. Cache age alone is not dwell.
-    ``force`` flushes a rotation or a session change with the capped elapsed
-    time; the server still drops anything under its view floor.
+    Dwell is the span between the first and last continuous poll. A short
+    view that ended before the floor is not billed.
     """
     ad = cache.get("ad")
     if not ad or cache.get("billed") or cache.get("shown_at_ms") is None:
         return
-    elapsed_ms = _elapsed_ms(cache, now_ms)
-    if not force and elapsed_ms < _MIN_BILL_SECONDS * 1000:
+    elapsed_ms = _elapsed_ms(cache)
+    if elapsed_ms < _MIN_BILL_SECONDS * 1000:
         return
     from ..delivery import confirm_display
 
@@ -249,14 +262,18 @@ def render(session: dict | None = None) -> str:
         if not cache.get("billed"):
             if cache.get("shown_at_ms") is None:
                 cache["shown_at_ms"] = now_ms
+                cache["last_seen_ms"] = now_ms
                 cache["event_uuid"] = cache.get("event_uuid") or str(uuid.uuid4())
                 _save_cache(cache)
                 return line
-            _bill_cached(cache, now_ms, config)
+            _note_seen(cache, now_ms)
+            _save_cache(cache)
+            _bill_cached(cache, config)
         return line
 
     if cache.get("ad") and not cache.get("billed") and cache.get("shown_at_ms") is not None:
-        _bill_cached(cache, now_ms, config, force=True)
+        _note_seen(cache, now_ms)
+        _bill_cached(cache, config)
 
     from ..delivery import reserve_ad
 
@@ -279,6 +296,7 @@ def render(session: dict | None = None) -> str:
         "ad": ad,
         "fetched_at": now,
         "shown_at_ms": now_ms,
+        "last_seen_ms": now_ms,
         "session_id": session_id,
         "billed": False,
         "event_uuid": str(uuid.uuid4()),

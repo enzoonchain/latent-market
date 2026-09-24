@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { claudeBundle, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
+import { claudeBundle, isPatched, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
 
 // Shapes taken from an installed Claude Code 2.1.278.
 const MONACO_TOKENIZER = 'tokenizer:{root:[[/child-src/,"string.quote"],[/connect-src/,"string.quote"],[/default-src/,"string.quote"]]}';
@@ -19,6 +19,17 @@ describe("claudeBundle", () => {
     const hit = claudeBundle(dir);
     expect(hit?.bundlePath).toBe(join(webview, "index.js"));
     expect(hit?.cspHostPath).toBe(join(dir, "extension.js"));
+  });
+});
+
+describe("isPatched", () => {
+  it("reads the marker from the tail, not from the start of a large file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "latent-tail-"));
+    const file = join(dir, "index.js");
+    writeFileSync(file, `${"x".repeat(80_000)}/* LATENT-START */`);
+    expect(isPatched(file)).toBe(true);
+    writeFileSync(file, `/* LATENT-START */${"x".repeat(80_000)}`);
+    expect(isPatched(file)).toBe(false);
   });
 });
 

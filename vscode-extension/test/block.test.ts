@@ -22,6 +22,11 @@ describe("buildBlock", () => {
   it("paints on document.body and does not mutate the spinner row", () => {
     expect(block).toContain("document.body");
     expect(block).toContain("position:fixed");
+    expect(block).toContain("r.bottom");
+    expect(block).toContain("cadencedShimmer");
+    expect(block).toContain("statusRow_");
+    expect(block).toContain("data-latent-spinner");
+    expect(block).not.toContain("editor-background");
     expect(block).not.toContain("MutationObserver");
     expect(block).not.toContain("s.appendChild");
   });
