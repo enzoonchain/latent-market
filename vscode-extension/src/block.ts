@@ -26,13 +26,24 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     var CFG = ${cfg};
     var PANE = Math.random().toString(16).slice(2, 10);
     var MIN_VIEW_MS = 10000, TICK_MS = 2500;
-    var cur = null, viewing = false, viewSince = 0, cumMs = 0, billed = false, tickAt = 0, viewableSent = false;
+    var cur = null, viewing = false, viewSince = 0, cumMs = 0, billed = false, serverCredited = false, tickAt = 0, viewableSent = false;
+    function isSpinnerRow(el){
+      var cl = el && el.classList;
+      if (!cl) return false;
+      for (var i = 0; i < cl.length; i++) if (cl[i].indexOf("spinnerRow_") === 0) return true;
+      return false;
+    }
+    // Read-only. The last non-empty spinnerRow_ is the live thinking row.
+    // Never write into it: Claude Code's React tree tears the row out and
+    // re-renders forever if a child, style, or innerHTML changes.
     function spinner(){
-      return document.querySelector('[class*="spinnerRow_"]')
-          || document.querySelector('[class*="statusRow_"]')
-          || document.querySelector('[class*="shimmer"]')
-          || document.querySelector('[class*="thinkingShimmer"]')
-          || document.querySelector('[data-latent-spinner]');
+      var els = document.querySelectorAll('[class*="spinnerRow_"]');
+      var last = null;
+      for (var i = 0; i < els.length; i++) {
+        if (!isSpinnerRow(els[i])) continue;
+        if ((els[i].textContent || "").replace(/\\s/g, "") !== "") last = els[i];
+      }
+      return last;
     }
     function busy(){ var s = spinner(); return !!(s && s.offsetParent !== null); }
     function visible(){ return document.visibilityState === 'visible'; }
@@ -89,48 +100,64 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     function bill(){
       if(!cur || !cur.adId || billed) return; billed = true;
       var ms = totalMs();
+      var ad = cur;
       metric(ms >= MIN_VIEW_MS ? 'view_threshold_met' : 'error_impression', { cumulative_ms: ms });
-      try { fetch(CFG.base + '/impression', { method:'POST', headers:{'Content-Type':'application/json'}, keepalive: true,
-        body: JSON.stringify({ adId: cur.adId, token: cur.token, displayedMs: ms, surface: 'spinner', pane: PANE }) }); } catch(e){}
+      fetch(CFG.base + '/impression', { method:'POST', headers:{'Content-Type':'application/json'}, keepalive: true,
+        body: JSON.stringify({ adId: ad.adId, token: ad.token, displayedMs: ms, surface: 'spinner', pane: PANE }) })
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if(j && j.status === 'tracked' && cur === ad){ serverCredited = true; paint(); } })
+        .catch(function(){});
     }
     function leave(){ if(!viewing) return; cumMs += Date.now() - viewSince; viewing = false; }
     function endCycle(){
       if(!cur) return;
       leave(); bill();
       restoreGlyph();
-      cur = null; cumMs = 0; billed = false; viewableSent = false; tickAt = 0;
+      cur = null; cumMs = 0; billed = false; serverCredited = false; viewableSent = false; tickAt = 0;
+    }
+    var overlay = null;
+    function hideOverlay(){ if(overlay) overlay.style.display = 'none'; }
+    function ensureOverlay(){
+      if(overlay && overlay.parentNode) return overlay;
+      overlay = document.createElement('div');
+      overlay.setAttribute('data-latent-row','1');
+      overlay.style.cssText = 'position:fixed;z-index:2147483000;display:none;align-items:center;gap:6px;padding:0 8px;box-sizing:border-box;overflow:hidden;pointer-events:auto;background:var(--vscode-editor-background,#1e1e1e);color:inherit;';
+      var img = document.createElement('img');
+      img.setAttribute('data-latent-favicon','1');
+      img.alt = '';
+      img.style.cssText = 'width:14px;height:14px;border-radius:3px;display:none;object-fit:cover;flex:none;';
+      var label = document.createElement('a');
+      label.setAttribute('data-latent-label','1');
+      label.style.cssText = 'color:inherit;text-decoration:underline;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;';
+      var tag = document.createElement('span');
+      tag.setAttribute('data-latent-tag','1');
+      tag.style.cssText = 'font-size:10px;opacity:.65;flex:none;';
+      var open = document.createElement('a');
+      open.setAttribute('data-latent-open','1');
+      open.textContent = 'Open';
+      open.style.cssText = 'flex:none;cursor:pointer;text-decoration:none;border:1px solid currentColor;border-radius:999px;padding:1px 8px;font-size:11px;line-height:16px;opacity:.9;';
+      function onClick(){
+        try { fetch(CFG.base + '/click', { method:'POST', headers:{'Content-Type':'application/json'}, keepalive: true,
+          body: JSON.stringify({ adId: cur ? cur.adId : '', surface: 'spinner' }) }); } catch(e){}
+      }
+      label.addEventListener('click', onClick);
+      open.addEventListener('click', onClick);
+      overlay.appendChild(img); overlay.appendChild(label); overlay.appendChild(tag); overlay.appendChild(open);
+      (document.body || document.documentElement).appendChild(overlay);
+      return overlay;
+    }
+    function placeOverlay(s){
+      var r = s.getBoundingClientRect();
+      if(!r || (!r.width && !r.height)){ hideOverlay(); return; }
+      overlay.style.display = 'inline-flex';
+      overlay.style.left = r.left + 'px';
+      overlay.style.top = r.top + 'px';
+      overlay.style.width = r.width + 'px';
+      overlay.style.height = Math.max(r.height, 18) + 'px';
     }
     function paint(){
-      var s = spinner(); if(!s || !cur) return;
-      var row = s.querySelector('[data-latent-row]');
-      if(!row){
-        row = document.createElement('span');
-        row.setAttribute('data-latent-row','1');
-        row.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:8px;min-width:0;max-width:100%;vertical-align:middle;';
-        var img = document.createElement('img');
-        img.setAttribute('data-latent-favicon','1');
-        img.alt = '';
-        img.style.cssText = 'width:14px;height:14px;border-radius:3px;display:none;object-fit:cover;flex:none;';
-        var label = document.createElement('a');
-        label.setAttribute('data-latent-label','1');
-        label.style.cssText = 'color:inherit;text-decoration:underline;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;';
-        var tag = document.createElement('span');
-        tag.setAttribute('data-latent-tag','1');
-        tag.style.cssText = 'font-size:10px;opacity:.65;flex:none;';
-        var open = document.createElement('a');
-        open.setAttribute('data-latent-open','1');
-        open.textContent = 'Open';
-        open.style.cssText = 'flex:none;cursor:pointer;text-decoration:none;border:1px solid currentColor;border-radius:999px;padding:1px 8px;font-size:11px;line-height:16px;opacity:.9;';
-        function onClick(){
-          // Best-effort billing twin — the href navigation is the real path.
-          try { fetch(CFG.base + '/click', { method:'POST', headers:{'Content-Type':'application/json'}, keepalive: true,
-            body: JSON.stringify({ adId: cur ? cur.adId : '', surface: 'spinner' }) }); } catch(e){}
-        }
-        label.addEventListener('click', onClick);
-        open.addEventListener('click', onClick);
-        row.appendChild(img); row.appendChild(label); row.appendChild(tag); row.appendChild(open);
-        s.appendChild(row);
-      }
+      var s = spinner(); if(!s || !cur){ hideOverlay(); return; }
+      var row = ensureOverlay();
       var labelEl = row.querySelector('[data-latent-label]');
       var openEl = row.querySelector('[data-latent-open]');
       var tagEl = row.querySelector('[data-latent-tag]');
@@ -142,7 +169,7 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       openEl.removeAttribute('title');
       if(href){ labelEl.setAttribute('href', href); openEl.setAttribute('href', href); }
       else { labelEl.removeAttribute('href'); openEl.removeAttribute('href'); }
-      if(billed && totalMs() >= MIN_VIEW_MS){
+      if(serverCredited){
         tagEl.textContent = 'credited';
         tagEl.style.color = '#16a34a';
         tagEl.style.opacity = '1';
@@ -156,13 +183,13 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       var icon = isDataImage(cur.iconUrl) ? cur.iconUrl : '';
       if(icon){ imgEl.src = icon; imgEl.style.display = 'inline-block'; }
       else { imgEl.style.display = 'none'; }
-      paintIcon(s);
+      placeOverlay(s);
     }
     async function show(){
       if(cur) return;
       cur = await fetchAd();
       if(!cur) return;
-      cumMs = 0; billed = false; viewableSent = false; tickAt = Date.now();
+      cumMs = 0; billed = false; serverCredited = false; viewableSent = false; tickAt = Date.now();
       metric('impression_rendered');
       paint();
     }
@@ -176,12 +203,10 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
           if(!billed && totalMs() >= MIN_VIEW_MS) bill();
           paint();
         });
-      } else if(cur){ endCycle(); }
+      } else if(cur){ endCycle(); hideOverlay(); }
     }
     setInterval(watch, 500);
-    // Rotate the creative on its own cadence while the agent stays busy.
     setInterval(function(){ if(onScreen() && cur){ endCycle(); show(); } }, CFG.rotate);
-    new MutationObserver(function(){ if(cur) paint(); }).observe(document.body, {childList:true,subtree:true});
   } catch(e) { /* fail open — never break the host webview */ }
 })();
 ${MARK_END}`;

@@ -58,7 +58,7 @@ export function openManagementPanel(
   }
   const panel = vscode.window.createWebviewPanel("latent.panel", "Latent", vscode.ViewColumn.One, {
     enableScripts: true,
-    retainContextWhenHidden: true,
+    retainContextWhenHidden: false,
     localResourceRoots: [vscode.Uri.joinPath(extensionUri, "media")],
   });
   panel.webview.html = panelHtml(panel.webview, extensionUri);
@@ -338,7 +338,7 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   $("dashboard").addEventListener("click", () => vscode.postMessage({ type: "openDashboard" }));
   $("refresh").addEventListener("click", () => vscode.postMessage({ type: "refresh" }));
   $("reload").addEventListener("click", () => vscode.postMessage({ type: "reload" }));
-  setInterval(() => vscode.postMessage({ type: "refresh" }), 20000);
+  setInterval(() => { if (document.visibilityState !== "hidden") vscode.postMessage({ type: "refresh" }); }, 20000);
   document.body.addEventListener("click", (e) => {
     const el = e.target instanceof Element ? e.target.closest("[data-act]") : null;
     if (!el || el.id === "accept" || el.id === "enabled" || el.id === "refresh") return;

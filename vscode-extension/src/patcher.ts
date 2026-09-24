@@ -13,7 +13,7 @@
  * from the webview bundle (see CSP_META_ANCHOR), so both get patched. It is off
  * by default and gated behind an explicit command / setting.
  */
-import { existsSync, readdirSync, readFileSync, renameSync, copyFileSync, writeFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { MARK_START, MARK_END } from "./block.js";
@@ -123,6 +123,26 @@ function compareVersionDirs(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/**
+ * Claude Code's chat UI is `webview/index.js`. The host `extension.js` also
+ * contains the substring "Thinking" (`thinkingDisplayExplicit`), so a scan for
+ * spinner verbs selects the host and the sponsor script never runs in the
+ * panel. The webview file is the target, and the CSP relaxation stays in the
+ * sibling host file.
+ */
+export function claudeBundle(extDir: string): Pick<AgentBundle, "bundlePath" | "cspHostPath"> | null {
+  const bundlePath = join(extDir, "webview", "index.js");
+  if (!existsSync(bundlePath)) return null;
+  const host = join(extDir, "extension.js");
+  let cspHostPath: string | null = null;
+  try {
+    if (existsSync(host) && readFileSync(host, "utf8").includes(CSP_META_ANCHOR)) cspHostPath = host;
+  } catch {
+    cspHostPath = null;
+  }
+  return { bundlePath, cspHostPath };
+}
+
 export function findAgentBundles(): AgentBundle[] {
   const out: AgentBundle[] = [];
   const seen = new Set<AgentKind>();
@@ -138,6 +158,13 @@ export function findAgentBundles(): AgentBundle[] {
       const agent = agentFor(name);
       if (!agent || seen.has(agent)) continue;
       const extDir = join(root, name);
+      if (agent === "claude-code") {
+        const hit = claudeBundle(extDir);
+        if (!hit) continue;
+        out.push({ agent, extDir, bundlePath: hit.bundlePath, cspHostPath: hit.cspHostPath });
+        seen.add(agent);
+        continue;
+      }
       const bundle = findBundleJs(extDir);
       if (bundle) {
         const cspHost = findCspHostJs(extDir);
@@ -182,11 +209,15 @@ export function relaxCsp(content: string): string {
 function patchCspHostFile(hostPath: string): void {
   try {
     const backup = hostPath + BACKUP_SUFFIX;
-    if (!existsSync(backup)) copyFileSync(hostPath, backup);
+    if (!existsSync(backup)) {
+      // A sponsor block never belongs in the host. An older locator appended
+      // it here; keep the backup without that block.
+      writeFileSync(backup, stripLatentBlock(readFileSync(hostPath, "utf8")));
+    }
     // From pristine every time: relaxCsp's default-src rule is not idempotent.
-    const pristine = readFileSync(backup, "utf8");
+    const pristine = stripLatentBlock(readFileSync(backup, "utf8"));
     const relaxed = relaxCsp(pristine);
-    if (relaxed !== pristine) writeFileSync(hostPath, relaxed);
+    if (relaxed !== readFileSync(hostPath, "utf8")) writeFileSync(hostPath, relaxed);
   } catch {
     /* best effort */
   }

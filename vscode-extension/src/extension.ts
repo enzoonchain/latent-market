@@ -11,7 +11,7 @@ import * as vscode from "vscode";
 import { loadConfig } from "./config.js";
 import { classifyWorkspace, type Category } from "./classify.js";
 import { Loopback } from "./loopback.js";
-import { buildBlock } from "./block.js";
+import { buildBlock, MARK_START } from "./block.js";
 import { buildCursorBlock, CURSOR_BUILD } from "./cursor-block.js";
 import { findAgentBundles, patch, restore, isPatched } from "./patcher.js";
 import { refreshKillswitch, shouldServe } from "./health.js";
@@ -68,13 +68,18 @@ function agentRows(): PanelState["agents"] {
   return (["claude-code", "codex"] as const).map((agent) => {
     const bundle = found.find((b) => b.agent === agent);
     if (!bundle) return { agent, installed: false, patched: false, conflict: false };
-    let conflict = false;
+    let text = "";
     try {
-      conflict = checkBundleConflict(readFileSync(bundle.bundlePath, "utf8")).hasConflict;
+      text = readFileSync(bundle.bundlePath, "utf8");
     } catch {
-      conflict = false;
+      text = "";
     }
-    return { agent, installed: true, patched: isPatched(bundle.bundlePath), conflict };
+    return {
+      agent,
+      installed: true,
+      patched: text.includes(MARK_START),
+      conflict: text ? checkBundleConflict(text).hasConflict : false,
+    };
   });
 }
 
@@ -109,13 +114,14 @@ async function collectPanelState(context: vscode.ExtensionContext): Promise<Pane
   const cli = runAllChecks().find((c) => c.target === "claude-cli");
   const health = shouldServe();
   const events = loopback?.recentEvents().slice(-5).map((ev) => ev.event).join(", ") || "none";
+  const agents = agentRows();
   return {
     policyAccepted: accepted,
     policyVersion: POLICY_VERSION,
     enabled: cfg.enabled,
     wallet: cfg.wallet,
     balanceText,
-    agents: agentRows(),
+    agents,
     cliRuntime: existsSync(statuslineRuntimePath()),
     cliInstalled: !!cli && cli.message.includes("Latent owns"),
     sponsorSurface: sponsorSurface(),
@@ -125,7 +131,7 @@ async function collectPanelState(context: vscode.ExtensionContext): Promise<Pane
       `serve: ${health.ok ? "ok" : health.reason || "paused"}`,
       `loopback: ${loopback ? "up" : "off"}`,
       `events: ${events}`,
-      ...agentRows().map((a) => `${a.agent}: ${a.installed ? (a.patched ? "patched" : "installed") : "missing"}`),
+      ...agents.map((a) => `${a.agent}: ${a.installed ? (a.patched ? "patched" : "installed") : "missing"}`),
     ].join("\n"),
   };
 }

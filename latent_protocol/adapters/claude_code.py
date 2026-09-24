@@ -29,6 +29,7 @@ import json
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 
 from ..ad_client import AdClient
@@ -42,9 +43,11 @@ _CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
 _DEFAULT_ROTATE_SECONDS = 30
 _DEFAULT_REFRESH_INTERVAL = 30
-# Bill only after the cached line has been on screen this long. The statusLine
-# command restarts every refresh; dwell is the cache age, not process time.
+# Bill only after the line has actually been on screen this long. Dwell starts
+# at first render (shown_at_ms), not at fetch time, and never exceeds
+# _MAX_DISPLAY_MS — a later process must not bill a day of cache age.
 _MIN_BILL_SECONDS = 10
+_MAX_DISPLAY_MS = 600_000
 
 
 # ── Rendering ────────────────────────────────────────────────────────────────
@@ -178,23 +181,42 @@ def _context_from_session(session: dict) -> str:
     return "coding"
 
 
-def _bill_cached(cache: dict, now: float, config: Config) -> None:
-    """Credit the cached ad once it has been shown for ``_MIN_BILL_SECONDS``."""
+def _now_ms(now: float) -> int:
+    return int(now * 1000)
+
+
+def _elapsed_ms(cache: dict, now_ms: int) -> int:
+    shown = cache.get("shown_at_ms")
+    if not isinstance(shown, (int, float)):
+        return 0
+    return max(0, min(now_ms - int(shown), _MAX_DISPLAY_MS))
+
+
+def _bill_cached(cache: dict, now_ms: int, config: Config, *, force: bool = False) -> None:
+    """Credit a line this process actually rendered.
+
+    ``shown_at_ms`` is set on first display. Cache age alone is not dwell.
+    ``force`` flushes a rotation or a session change with the capped elapsed
+    time; the server still drops anything under its view floor.
+    """
     ad = cache.get("ad")
-    if not ad or cache.get("billed"):
+    if not ad or cache.get("billed") or cache.get("shown_at_ms") is None:
         return
-    elapsed = now - float(cache.get("fetched_at") or 0)
-    if elapsed < _MIN_BILL_SECONDS:
+    elapsed_ms = _elapsed_ms(cache, now_ms)
+    if not force and elapsed_ms < _MIN_BILL_SECONDS * 1000:
         return
     from ..delivery import confirm_display
 
+    event_id = str(cache.get("event_uuid") or uuid.uuid4())
     confirm_display(
         Tracker(config.server),
         ad,
         config.wallet,
-        displayed_ms=int(elapsed * 1000),
+        displayed_ms=elapsed_ms,
+        event_uuid=event_id,
     )
     cache["billed"] = True
+    cache["event_uuid"] = event_id
     _save_cache(cache)
 
 
@@ -212,8 +234,8 @@ def render(session: dict | None = None) -> str:
 
     session_id = str(session.get("session_id", "") or "")
     now = time.time()
+    now_ms = _now_ms(now)
     cache = _load_cache()
-    _bill_cached(cache, now, config)
 
     fresh = (
         cache.get("ad")
@@ -221,7 +243,20 @@ def render(session: dict | None = None) -> str:
         and cache.get("session_id", session_id) == session_id
     )
     if fresh:
-        return format_statusline(cache["ad"])
+        line = format_statusline(cache["ad"])
+        if not line:
+            return ""
+        if not cache.get("billed"):
+            if cache.get("shown_at_ms") is None:
+                cache["shown_at_ms"] = now_ms
+                cache["event_uuid"] = cache.get("event_uuid") or str(uuid.uuid4())
+                _save_cache(cache)
+                return line
+            _bill_cached(cache, now_ms, config)
+        return line
+
+    if cache.get("ad") and not cache.get("billed") and cache.get("shown_at_ms") is not None:
+        _bill_cached(cache, now_ms, config, force=True)
 
     from ..delivery import reserve_ad
 
@@ -240,7 +275,14 @@ def render(session: dict | None = None) -> str:
     if not line:
         return ""
     # Shown now; billed on a later refresh once dwell clears 10s.
-    _save_cache({"ad": ad, "fetched_at": now, "session_id": session_id, "billed": False})
+    _save_cache({
+        "ad": ad,
+        "fetched_at": now,
+        "shown_at_ms": now_ms,
+        "session_id": session_id,
+        "billed": False,
+        "event_uuid": str(uuid.uuid4()),
+    })
     return line
 
 

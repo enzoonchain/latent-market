@@ -48,6 +48,9 @@ describe("buildCursorBlock", () => {
     expect(block).toContain("/hello?build=");
     expect(block).toContain("earnAmount");
     expect(block).toContain('"+$"');
+    expect(block).toContain("visibilityState");
+    expect(block).toContain('j.status === "tracked"');
+    expect(block).toContain("syncDock(null, 0)");
     expect(block).toContain("getBoundingClientRect");
     expect(block).not.toContain("bottom:72px");
     expect(block).not.toContain("translateX(-50%)");

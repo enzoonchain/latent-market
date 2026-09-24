@@ -254,28 +254,35 @@ export class Loopback {
           surface?: string;
         };
         if (typeof body.displayedMs !== "number" || body.displayedMs < MIN_VIEW_MS) {
-          return send(res, 200, { ok: true, skipped: "below_view_threshold" });
+          return send(res, 200, { ok: false, status: "skipped", skipped: "below_view_threshold" });
         }
-        await fetch(`${cfg.server}/ad/impression`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ad_id: body.adId || "",
-            user_wallet: cfg.wallet,
-            token: body.token || "",
-            agent: this.agent,
-            surface: body.surface || "spinner",
-            context: this.getCategory() || "",
-            // device_id is re-sent here (the API is stateless) so the
-            // impressions row carries it for the per-device daily cap.
-            device_id: deviceId(),
-            ...(typeof body.displayedMs === "number"
-              ? { displayed_ms: Math.round(body.displayedMs) }
-              : {}),
-          }),
-          signal: AbortSignal.timeout(3000),
-        }).catch(() => undefined);
-        return send(res, 200, { ok: true });
+        let status = "skipped";
+        try {
+          const ir = await fetch(`${cfg.server}/ad/impression`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ad_id: body.adId || "",
+              user_wallet: cfg.wallet,
+              token: body.token || "",
+              agent: this.agent,
+              surface: body.surface || "spinner",
+              context: this.getCategory() || "",
+              // device_id is re-sent here (the API is stateless) so the
+              // impressions row carries it for the per-device daily cap.
+              device_id: deviceId(),
+              displayed_ms: Math.round(body.displayedMs),
+            }),
+            signal: AbortSignal.timeout(3000),
+          });
+          if (ir.ok) {
+            const j = (await ir.json()) as { status?: string };
+            if (j.status === "tracked") status = "tracked";
+          }
+        } catch {
+          status = "skipped";
+        }
+        return send(res, 200, { ok: status === "tracked", status });
       }
 
       if (route === "click" && req.method === "POST") {

@@ -80,9 +80,11 @@ def test_bills_after_ten_seconds(env, monkeypatch):
     cc.render({"session_id": "s1"})
     cc.render({"session_id": "s1"})
     assert client.get_ad.call_count == 1
-    tracker.log_impression.assert_called_once_with(
-        "ad-1", "0xDEADBEEF", "tok-abc", displayed_ms=10000
-    )
+    tracker.log_impression.assert_called_once()
+    args, kwargs = tracker.log_impression.call_args
+    assert args == ("ad-1", "0xDEADBEEF", "tok-abc")
+    assert kwargs["displayed_ms"] == 10000
+    assert isinstance(kwargs["event_uuid"], str) and kwargs["event_uuid"]
 
 
 def test_reuses_cache_within_rotation_window(env, monkeypatch):
@@ -107,6 +109,41 @@ def test_refetches_after_rotation_window(env, monkeypatch):
     cc.render({"session_id": "s1"})  # bills the second ad (10s)
     assert client.get_ad.call_count == 2
     assert tracker.log_impression.call_count == 2
+
+
+def test_overnight_reopen_caps_dwell_and_checks_the_session_first(env, monkeypatch):
+    """A 2s view closed overnight must not bill a day of cache age."""
+    _client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    cc.render({"session_id": "s1"})
+    cache = json.loads(cc._CACHE_FILE.read_text())
+    cache["fetched_at"] = 1_000.0
+    cache["shown_at_ms"] = 1_000_000
+    cc._CACHE_FILE.write_text(json.dumps(cache))
+    monkeypatch.setattr(cc.time, "time", lambda: 1_000.0 + 86_400)
+    cc.render({"session_id": "other-session"})
+    tracker.log_impression.assert_called_once()
+    assert tracker.log_impression.call_args.kwargs["displayed_ms"] == cc._MAX_DISPLAY_MS
+
+
+def test_unshown_cache_is_not_billed(env, monkeypatch):
+    _client, tracker = env
+    monkeypatch.setattr(cc.Config, "from_env", staticmethod(lambda: _cfg()))
+    cc._CACHE_FILE.write_text(json.dumps({
+        "ad": FAKE_AD,
+        "fetched_at": 1_000.0,
+        "session_id": "s1",
+        "billed": False,
+    }))
+    monkeypatch.setattr(cc.time, "time", lambda: 1_000.0 + 86_400)
+    cc.render({"session_id": "s1"})
+    billed = [
+        c for c in tracker.log_impression.call_args_list
+        if c.args and c.args[0] == "ad-1" and c.kwargs.get("displayed_ms", 0) > cc._MAX_DISPLAY_MS
+    ]
+    assert billed == []
+    if tracker.log_impression.called:
+        assert tracker.log_impression.call_args.kwargs["displayed_ms"] <= cc._MAX_DISPLAY_MS
 
 
 def test_no_ad_returns_empty(env, monkeypatch):

@@ -61,6 +61,7 @@ def confirm_display(
     ad: dict | None,
     wallet: str,
     displayed_ms: int | None = None,
+    event_uuid: str | None = None,
 ) -> bool:
     """Bill one impression for a creative that was attached to delivered output.
 
@@ -75,9 +76,9 @@ def confirm_display(
         return False
     token = ad.get("impression_token", "")
     if displayed_ms is None:
-        tracker.log_impression(ad_id, wallet, token)
+        tracker.log_impression(ad_id, wallet, token, event_uuid=event_uuid)
     else:
-        tracker.log_impression(ad_id, wallet, token, displayed_ms=displayed_ms)
+        tracker.log_impression(ad_id, wallet, token, displayed_ms=displayed_ms, event_uuid=event_uuid)
     return True
 
 

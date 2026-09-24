@@ -16,7 +16,7 @@
  */
 
 /** Baked into the workbench script. A running window that still reports an older id needs a reload. */
-export const CURSOR_BUILD = "0.5.0";
+export const CURSOR_BUILD = "0.5.6";
 
 export function buildCursorBlock(
   baseUrl: string,
@@ -310,23 +310,32 @@ export function buildCursorBlock(
   // Exactly one /impression per displayed creative: billable at the 10s view
   // threshold (fires immediately), otherwise honest cumulative dwell at cycle
   // end and the server's view-time gate decides the credit.
+  function markEarned() {
+    if (!cur || !el) return;
+    var tag = el.querySelector("[data-latent-tag]");
+    var earned = Number(cur.earnAmount);
+    var label = isFinite(earned) && earned > 0 ? "+$" + earned.toFixed(earned >= 0.01 ? 2 : 4) : "";
+    if (tag && label) {
+      tag.textContent = label;
+      tag.style.color = "#3cc36b";
+      tag.style.opacity = "1";
+      tag.style.fontWeight = "700";
+    }
+  }
+
   function bill() {
     if (!cur || !cur.adId || billed) return;
     billed = true;
     var ms = cumulativeMs;
+    var ad = cur;
     ping("/metric", { event: ms >= 10000 ? "view_threshold_met" : "error_impression", adId: cur.adId, cumulative_ms: ms });
-    ping("/impression", { adId: cur.adId, token: cur.token, displayedMs: ms, surface: "cursor" });
-    if (ms >= 10000 && el) {
-      var tag = el.querySelector("[data-latent-tag]");
-      var earned = Number(cur.earnAmount);
-      var label = isFinite(earned) && earned > 0 ? "+$" + earned.toFixed(earned >= 0.01 ? 2 : 4) : "";
-      if (tag && label) {
-        tag.textContent = label;
-        tag.style.color = "#3cc36b";
-        tag.style.opacity = "1";
-        tag.style.fontWeight = "700";
-      }
-    }
+    var payload = JSON.stringify({ adId: ad.adId, token: ad.token, displayedMs: ms, surface: "cursor" });
+    fetch(CFG.base + "/impression", { method: "POST", body: payload, keepalive: true })
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (j && j.status === "tracked" && cur === ad) markEarned();
+      })
+      .catch(function() {});
   }
 
   function reportViewable() {
@@ -358,6 +367,13 @@ export function buildCursorBlock(
 
   function hide() {
     if (el) el.style.display = "none";
+    syncDock(null, 0);
+  }
+
+  function lineVisible() {
+    if (document.visibilityState === "hidden") return false;
+    if (!el || el.style.display === "none" || el.style.visibility === "hidden") return false;
+    return true;
   }
 
   function rotate() {
@@ -380,11 +396,14 @@ export function buildCursorBlock(
 
   function startViewTicks() {
     stopViewTicks();
-    lastResume = Date.now();
+    lastResume = 0;
     viewTickTimer = setInterval(function() {
       if (!isBusy()) { pauseViewTicks(); return; }
-      cumulativeMs += Date.now() - lastResume;
-      lastResume = Date.now();
+      place();
+      if (!lineVisible()) { lastResume = 0; return; }
+      var now = Date.now();
+      if (lastResume) cumulativeMs += now - lastResume;
+      lastResume = now;
       reportViewTick();
       if (cumulativeMs >= 10000) bill();
     }, 2500);
@@ -392,10 +411,8 @@ export function buildCursorBlock(
 
   function pauseViewTicks() {
     if (viewTickTimer) { clearInterval(viewTickTimer); viewTickTimer = null; }
-    if (lastResume) {
-      cumulativeMs += Date.now() - lastResume;
-      lastResume = 0;
-    }
+    if (lastResume && lineVisible()) cumulativeMs += Date.now() - lastResume;
+    lastResume = 0;
   }
 
   function stopViewTicks() {
