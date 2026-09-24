@@ -1,0 +1,13 @@
+---
+description: Ship vscode-extension changes onto the installed Cursor extension in the same turn
+globs: vscode-extension/**/*
+alwaysApply: true
+---
+
+# Ship the extension immediately
+
+Changes here are not done until the running extension has them.
+
+- Commit and push to `origin` on the shipping branch. Do not open a PR and wait.
+- Package `vscode-extension` (`npx @vscode/vsce package --no-dependencies`) and install that VSIX with `cursor --install-extension <vsix> --force`.
+- A local edit does not update `~/.cursor/extensions/latentprotocol.latent-protocol-vscode-*`.

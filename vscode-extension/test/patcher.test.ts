@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { claudeBundle, codexBundle, injectCodexShimmer, isPatched, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
+import { claudeBundle, codexBundle, injectCodexShimmer, isPatched, jsParses, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
 
 // Shapes taken from an installed Claude Code 2.1.278.
 const MONACO_TOKENIZER = 'tokenizer:{root:[[/child-src/,"string.quote"],[/connect-src/,"string.quote"],[/default-src/,"string.quote"]]}';
@@ -18,7 +18,7 @@ describe("claudeBundle", () => {
     writeFileSync(join(webview, "index.js"), 'var verbs=["Clauding","Discombobulating"];');
     const hit = claudeBundle(dir);
     expect(hit?.bundlePath).toBe(join(webview, "index.js"));
-    expect(hit?.cspHostPath).toBe(join(dir, "extension.js"));
+    expect(hit?.cspHostPath).toBeNull();
   });
 });
 
@@ -68,42 +68,66 @@ describe("patch / restore", () => {
     return { agent: "claude-code", extDir: dir, bundlePath, cspHostPath };
   }
 
-  it("patches the bundle and relaxes the CSP in the separate host file", () => {
+  it("patches the webview bundle and leaves the extension host module untouched", () => {
     const b = fixture();
+    const host0 = readFileSync(b.cspHostPath!, "utf8");
     expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
     const bundle = readFileSync(b.bundlePath, "utf8");
     expect(bundle).toContain("LATENT-START");
-    expect(() => new Function(bundle)).not.toThrow();
-    expect(readFileSync(b.cspHostPath!, "utf8")).toContain("connect-src http://127.0.0.1:*");
+    expect(jsParses(bundle)).toBe(true);
+    expect(readFileSync(b.cspHostPath!, "utf8")).toBe(host0);
+    expect(existsSync(b.cspHostPath + ".latent-backup")).toBe(false);
   });
 
-  it("re-patching starts from pristine (no stacked connect-src)", () => {
+  it("re-patching starts from pristine (no stacked sponsor blocks)", () => {
     const b = fixture();
     patch(b, "/* LATENT-START */;/* LATENT-END */");
     patch(b, "/* LATENT-START */;/* LATENT-END */");
-    expect(readFileSync(b.cspHostPath!, "utf8").match(/connect-src/g)).toHaveLength(1);
+    expect(readFileSync(b.bundlePath, "utf8").match(/LATENT-START/g)).toHaveLength(1);
   });
 
   it("mints a pristine backup from a live file that already carries the block", () => {
     const b = fixture();
     const pristine = readFileSync(b.bundlePath, "utf8");
-    writeFileSync(b.bundlePath, `${pristine}\n/* LATENT-START */old/* LATENT-END */\n`);
-    expect(patch(b, "/* LATENT-START */new/* LATENT-END */")).toBe("patched");
+    writeFileSync(b.bundlePath, `${pristine}\n/* LATENT-START */;"old"/* LATENT-END */\n`);
+    expect(patch(b, "/* LATENT-START */;'new'/* LATENT-END */")).toBe("patched");
     const backup = readFileSync(b.bundlePath + ".latent-backup", "utf8");
     expect(backup).not.toContain("LATENT-START");
     expect(backup).toContain("Thinking");
-    expect(readFileSync(b.bundlePath, "utf8")).toContain("LATENT-START */new");
+    expect(readFileSync(b.bundlePath, "utf8")).toContain("LATENT-START */;'new'");
   });
 
-  it("drops a sponsor block that an older locator left in the CSP host", () => {
+  it("strips a sponsor block an older locator left in the extension host", () => {
     const b = fixture();
     const host = readFileSync(b.cspHostPath!, "utf8");
     writeFileSync(b.cspHostPath!, `${host}\n/* LATENT-START */nope/* LATENT-END */\n`);
     expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
     const after = readFileSync(b.cspHostPath!, "utf8");
     expect(after).not.toContain("LATENT-START");
-    expect(after).toContain("connect-src http://127.0.0.1:*");
+    expect(after).not.toContain("127.0.0.1");
     expect(readFileSync(b.bundlePath, "utf8")).toContain("LATENT-START");
+  });
+
+  it("restores a parseable host backup and keeps a broken one off the live file", () => {
+    const b = fixture();
+    const host0 = readFileSync(b.cspHostPath!, "utf8");
+    writeFileSync(b.cspHostPath!, "function ( {");
+    writeFileSync(b.cspHostPath! + ".latent-backup", "function ( {");
+    expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
+    expect(readFileSync(b.cspHostPath!, "utf8")).toBe("function ( {");
+
+    writeFileSync(b.cspHostPath! + ".latent-backup", host0);
+    expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
+    expect(readFileSync(b.cspHostPath!, "utf8")).toBe(host0);
+    expect(existsSync(b.cspHostPath + ".latent-backup")).toBe(false);
+  });
+
+  it("does not write the bundle when neither it nor its backup parses", () => {
+    const b = fixture();
+    writeFileSync(b.bundlePath, "function ( {");
+    writeFileSync(b.bundlePath + ".latent-backup", "function ( {");
+    expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("error");
+    expect(readFileSync(b.bundlePath, "utf8")).toBe("function ( {");
   });
 
   it("restore puts both files back byte-for-byte", () => {
@@ -147,10 +171,10 @@ describe("codex shimmer injection", () => {
     writeFileSync(join(dir, "extension.js"), HOST_CSP);
     const hit = codexBundle(dir);
     expect(hit?.bundlePath).toBe(shimmer);
-    expect(hit?.cspHostPath).toBe(join(dir, "extension.js"));
+    expect(hit?.cspHostPath).toBeNull();
   });
 
-  it("patches the shimmer function, relaxes the host, and restores a stale chunk", () => {
+  it("patches the shimmer function, leaves the host module, and restores a stale chunk", () => {
     const dir = mkdtempSync(join(tmpdir(), "latent-codex-patch-"));
     const assets = join(dir, "webview", "assets");
     mkdirSync(assets, { recursive: true });
@@ -167,10 +191,9 @@ describe("codex shimmer injection", () => {
     const bundle = readFileSync(bundlePath, "utf8");
     expect(bundle.indexOf("LATENT-START")).toBeGreaterThan(bundle.indexOf("function vJt"));
     expect(bundle.indexOf("function yPt")).toBeLessThan(bundle.indexOf("LATENT-START"));
-    expect(() => new Function(bundle)).not.toThrow();
-    const host = readFileSync(cspHostPath, "utf8");
-    expect(() => new Function(host)).not.toThrow();
-    expect(host).toContain("127.0.0.1");
+    expect(jsParses(bundle)).toBe(true);
+    expect(readFileSync(cspHostPath, "utf8")).toBe(host0);
+    expect(existsSync(cspHostPath + ".latent-backup")).toBe(false);
     expect(readFileSync(stale, "utf8")).toBe("pristine-am");
     patch(b, "/* LATENT-START */;/* LATENT-END */");
     expect(readFileSync(bundlePath, "utf8").match(/LATENT-START/g)).toHaveLength(1);

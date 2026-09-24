@@ -11,14 +11,16 @@
  * marker-delimited, and `restore()` puts the original bytes back and removes
  * the CSP relaxation.
  *
- * This modifies a third-party signed extension and relaxes its webview CSP to
- * reach the 127.0.0.1 loopback — the CSP usually lives in a separate host file
- * from the webview bundle (see CSP_META_ANCHOR), so both get patched. It is off
- * by default and gated behind an explicit command / setting.
+ * This modifies a third-party signed extension and relaxes CSP only inside the
+ * webview bundle, so the sponsor script can reach the 127.0.0.1 loopback. The
+ * extension host module (`package.json` `main`, usually `extension.js`) is
+ * never rewritten: a syntax error there kills Claude Code and Codex together.
+ * It is off by default and gated behind an explicit command / setting.
  */
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { MARK_START, MARK_END } from "./block.js";
 
 const BACKUP_SUFFIX = ".latent-backup";
@@ -35,6 +37,85 @@ const VERB_ANCHORS = ["Discombobulating", "Clauding", "Reticulating", "Flibberti
  * `default-src 'none'`.
  */
 const CSP_META_ANCHOR = 'http-equiv="Content-Security-Policy"';
+
+/** True when `node --check` accepts the source. A failed check means the file must not be written. */
+export function jsParses(content: string): boolean {
+  const file = join(tmpdir(), `latent-syntax-${process.pid}-${Math.random().toString(16).slice(2)}.js`);
+  try {
+    writeFileSync(file, content);
+    const result = spawnSync(process.execPath, ["--check", file], {
+      encoding: "utf8",
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  } finally {
+    try {
+      unlinkSync(file);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** `package.json` `main`, or `extension.js` when the manifest is missing. */
+function extensionMainPath(extDir: string): string {
+  const fallback = join(extDir, "extension.js");
+  try {
+    const pkg = JSON.parse(readFileSync(join(extDir, "package.json"), "utf8")) as { main?: unknown };
+    if (typeof pkg.main === "string" && pkg.main.length > 0) return resolve(extDir, pkg.main);
+  } catch {
+    /* no manifest */
+  }
+  return resolve(fallback);
+}
+
+function isExtensionHostModule(extDir: string, filePath: string): boolean {
+  return resolve(filePath) === extensionMainPath(extDir);
+}
+
+/** A CSP file that is the extension host entry must not be patched. */
+function safeCspHost(extDir: string, bundlePath: string, cspHost: string | null): string | null {
+  if (!cspHost || cspHost === bundlePath) return null;
+  if (isExtensionHostModule(extDir, cspHost)) return null;
+  return cspHost;
+}
+
+/**
+ * Put a previously patched host module back, once. A backup that does not
+ * parse is left in place so a bad snapshot cannot overwrite a good file.
+ */
+export function releaseExtensionHost(extDir: string): void {
+  const host = extensionMainPath(extDir);
+  if (!existsSync(host)) return;
+  const backup = host + BACKUP_SUFFIX;
+  if (existsSync(backup)) {
+    let saved = "";
+    try {
+      saved = readFileSync(backup, "utf8");
+    } catch {
+      return;
+    }
+    if (!jsParses(saved)) return;
+    try {
+      const live = readFileSync(host, "utf8");
+      if (live !== saved) writeFileSync(host, saved);
+      unlinkSync(backup);
+    } catch {
+      /* leave both files */
+    }
+    return;
+  }
+  try {
+    const live = readFileSync(host, "utf8");
+    if (!live.includes(MARK_START)) return;
+    const stripped = stripLatentBlock(live);
+    if (stripped !== live && jsParses(stripped)) writeFileSync(host, stripped);
+  } catch {
+    /* ignore */
+  }
+}
 
 export type AgentKind = "claude-code" | "codex";
 
@@ -167,14 +248,13 @@ function compareVersionDirs(a: string, b: string): number {
  * Claude Code's chat UI is `webview/index.js`. The host `extension.js` also
  * contains the substring "Thinking" (`thinkingDisplayExplicit`), so a scan for
  * spinner verbs selects the host and the sponsor script never runs in the
- * panel. The webview file is the target, and the CSP relaxation stays in the
- * sibling host file.
+ * panel. CSP for that panel lives in `extension.js` too, and rewriting that
+ * file crashes the extension host, so it is left alone.
  */
 export function claudeBundle(extDir: string): Pick<AgentBundle, "bundlePath" | "cspHostPath"> | null {
   const bundlePath = join(extDir, "webview", "index.js");
   if (!existsSync(bundlePath)) return null;
-  const host = join(extDir, "extension.js");
-  return { bundlePath, cspHostPath: existsSync(host) ? host : null };
+  return { bundlePath, cspHostPath: null };
 }
 
 /**
@@ -187,7 +267,7 @@ export function codexBundle(extDir: string): Pick<AgentBundle, "bundlePath" | "c
   const bundlePath = findFileWithAllAnchors(extDir, ["loading-shimmer-pure-text", "cadencedShimmer"]);
   if (!bundlePath) return null;
   const cspHost = findCspHostJs(extDir);
-  return { bundlePath, cspHostPath: cspHost && cspHost !== bundlePath ? cspHost : null };
+  return { bundlePath, cspHostPath: safeCspHost(extDir, bundlePath, cspHost) };
 }
 
 const TAIL_BYTES = 64 * 1024;
@@ -275,7 +355,7 @@ function locateAgentBundles(): AgentBundle[] {
       const bundle = findBundleJs(extDir);
       if (bundle) {
         const cspHost = findCspHostJs(extDir);
-        out.push({ agent, extDir, bundlePath: bundle, cspHostPath: cspHost && cspHost !== bundle ? cspHost : null });
+        out.push({ agent, extDir, bundlePath: bundle, cspHostPath: safeCspHost(extDir, bundle, cspHost) });
         seen.add(agent);
       }
     }
@@ -334,23 +414,41 @@ export function relaxCsp(content: string): string {
   return out;
 }
 
-/** Relax the separate CSP host file. Best effort: a failure here must not fail
- *  the bundle patch — the block still fails open without its loopback. */
-function patchCspHostFile(hostPath: string): void {
+/** Relax a CSP file that is not the extension host entry. Skip the write when
+ *  the result does not parse, or when the only backup is already broken. */
+function patchCspHostFile(extDir: string, hostPath: string): void {
+  if (isExtensionHostModule(extDir, hostPath)) return;
   try {
-    const backup = hostPath + BACKUP_SUFFIX;
-    if (!existsSync(backup)) {
-      // A sponsor block never belongs in the host. An older locator appended
-      // it here; keep the backup without that block.
-      writeFileSync(backup, stripLatentBlock(readFileSync(hostPath, "utf8")));
-    }
-    // From pristine every time: relaxCsp's default-src rule is not idempotent.
-    const pristine = stripLatentBlock(readFileSync(backup, "utf8"));
-    const relaxed = relaxCsp(pristine);
-    if (relaxed !== readFileSync(hostPath, "utf8")) writeFileSync(hostPath, relaxed);
+    const original = readFileSync(hostPath, "utf8");
+    const pristine = readPristine(hostPath, original);
+    if (pristine === null) return;
+    const relaxed = relaxCsp(stripLatentBlock(pristine));
+    if (!jsParses(relaxed)) return;
+    if (relaxed !== original) writeFileSync(hostPath, relaxed);
   } catch {
     /* best effort */
   }
+}
+
+/** Backup that parses, or the live file when that parses. Null when neither does. */
+function readPristine(path: string, original: string): string | null {
+  const backup = path + BACKUP_SUFFIX;
+  if (existsSync(backup)) {
+    try {
+      const saved = readFileSync(backup, "utf8");
+      if (jsParses(saved)) return saved;
+    } catch {
+      /* fall through to the live file */
+    }
+  }
+  const seed = original.includes(MARK_START) ? stripLatentBlock(original) : original;
+  if (!jsParses(seed)) return null;
+  try {
+    writeFileSync(backup, seed);
+  } catch {
+    /* a missing backup must not block a parseable live patch */
+  }
+  return seed;
 }
 
 const SHIMMER_TEXT = "loading-shimmer-pure-text";
@@ -436,32 +534,30 @@ export function stripLatentBlock(content: string): string {
 
 export function patch(bundle: AgentBundle, block: string): "patched" | "incompatible" | "error" {
   try {
+    releaseExtensionHost(bundle.extDir);
+    const cspHostPath =
+      bundle.cspHostPath && !isExtensionHostModule(bundle.extDir, bundle.cspHostPath) ? bundle.cspHostPath : null;
     const original = readFileSync(bundle.bundlePath, "utf8");
-    const backup = bundle.bundlePath + BACKUP_SUFFIX;
-    if (!existsSync(backup)) {
-      // Fossil: a live file that already carries our block has no pristine copy.
-      // Strip only our marker and keep that as the backup, then patch from it.
-      const seed = original.includes(MARK_START) ? stripLatentBlock(original) : original;
-      writeFileSync(backup, seed);
-    }
+    const pristine = readPristine(bundle.bundlePath, original);
+    if (pristine === null) return "error";
 
-    // Start from pristine so re-patching never stacks blocks.
-    const pristine = readFileSync(backup, "utf8");
     if (bundle.agent === "codex") {
       const injected = injectCodexShimmer(pristine, block);
       if (!injected) return "incompatible";
+      if (!jsParses(injected)) return "error";
       writeFileSync(bundle.bundlePath, injected);
-      if (bundle.cspHostPath) patchCspHostFile(bundle.cspHostPath);
-      retireStaleBundles(bundle.extDir, [bundle.bundlePath, bundle.cspHostPath].filter((p): p is string => !!p));
+      if (cspHostPath) patchCspHostFile(bundle.extDir, cspHostPath);
+      retireStaleBundles(bundle.extDir, [bundle.bundlePath, cspHostPath].filter((p): p is string => !!p));
       return "patched";
     }
 
     if (!VERB_ANCHORS.some((v) => pristine.includes(v)) && !VERB_ANCHORS.some((v) => original.includes(v))) {
       return "incompatible";
     }
-    const relaxed = relaxCsp(pristine);
-    writeFileSync(bundle.bundlePath, relaxed + "\n" + block + "\n");
-    if (bundle.cspHostPath) patchCspHostFile(bundle.cspHostPath);
+    const next = relaxCsp(pristine) + "\n" + block + "\n";
+    if (!jsParses(next)) return "error";
+    writeFileSync(bundle.bundlePath, next);
+    if (cspHostPath) patchCspHostFile(bundle.extDir, cspHostPath);
     return "patched";
   } catch {
     return "error";
@@ -472,7 +568,8 @@ export function restore(bundle: AgentBundle): boolean {
   const ok = restoreFile(bundle.bundlePath);
   // Best effort, and kept out of the return value so it can't hide a
   // successful bundle restore from the caller's count.
-  if (bundle.cspHostPath) restoreFile(bundle.cspHostPath);
+  if (bundle.cspHostPath && !isExtensionHostModule(bundle.extDir, bundle.cspHostPath)) restoreFile(bundle.cspHostPath);
+  releaseExtensionHost(bundle.extDir);
   if (bundle.agent === "codex") {
     retireStaleBundles(bundle.extDir, [bundle.bundlePath, bundle.cspHostPath].filter((p): p is string => !!p));
   }
@@ -498,6 +595,8 @@ function restoreFile(path: string): boolean {
     return false;
   }
   try {
+    const saved = readFileSync(backup, "utf8");
+    if (!jsParses(saved)) return false;
     renameSync(backup, path);
     return true;
   } catch {

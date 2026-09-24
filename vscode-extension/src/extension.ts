@@ -13,7 +13,7 @@ import { classifyWorkspace, type Category } from "./classify.js";
 import { Loopback } from "./loopback.js";
 import { BLOCK_BUILD, buildBlock, MARK_START } from "./block.js";
 import { buildCursorBlock, CURSOR_BUILD } from "./cursor-block.js";
-import { fileIncludes, fileStamp, findAgentBundles, isPatched, patch, restore } from "./patcher.js";
+import { fileIncludes, fileStamp, findAgentBundles, isPatched, patch, releaseExtensionHost, restore } from "./patcher.js";
 import { refreshKillswitch, shouldServe } from "./health.js";
 import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 import { MIN_VIEW_MS, ViewabilityTracker, type MetricEvent } from "./metrics.js";
@@ -313,12 +313,17 @@ function stopReassert(): void {
 }
 
 const bundleQuiet = new Map<string, string>();
+const releasedHosts = new Set<string>();
 
 function reassertSurfaces(context: vscode.ExtensionContext): void {
   const cur = loadConfig();
   if (!cur.enabled || !policiesOk(context) || !loopback) return;
   if (cur.patchAgentBundles) {
     for (const b of findAgentBundles()) {
+      if (!releasedHosts.has(b.extDir)) {
+        releasedHosts.add(b.extDir);
+        releaseExtensionHost(b.extDir);
+      }
       if (userRestored.has(b.agent)) continue;
       const stamp = fileStamp(b.bundlePath);
       const key = stamp ? `${stamp.mtimeMs}:${stamp.size}` : "";
