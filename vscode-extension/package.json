@@ -5,7 +5,7 @@
   "version": "0.5.11",
   "preview": true,
   "icon": "media/icon.png",
-  "publisher": "latent-protocol",
+  "publisher": "latentprotocol",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
