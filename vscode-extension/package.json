@@ -2,7 +2,7 @@
   "name": "latent-protocol-vscode",
   "displayName": "Latent Ads Market (Testnet) - Monetize the attention of Agents",
   "description": "Testnet (Base Sepolia). A labeled sponsor line while your coding agent works, and your USDC balance in the Latent panel.",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "preview": true,
   "icon": "media/icon.png",
   "publisher": "latentprotocol",
