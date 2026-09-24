@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { claudeBundle, codexBundle, injectCodexShimmer, isPatched, jsParses, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
+import { claudeBundle, codexBundle, injectCodexShimmer, isPatched, jsParses, patch, relaxClaudeCspMetas, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
 
 // Shapes taken from an installed Claude Code 2.1.278.
 const MONACO_TOKENIZER = 'tokenizer:{root:[[/child-src/,"string.quote"],[/connect-src/,"string.quote"],[/default-src/,"string.quote"]]}';
@@ -30,6 +30,21 @@ describe("isPatched", () => {
     expect(isPatched(file)).toBe(true);
     writeFileSync(file, `${"x".repeat(80_000)}/* LATENT-START */${"x".repeat(80_000)}`);
     expect(isPatched(file)).toBe(true);
+  });
+});
+
+describe("relaxClaudeCspMetas", () => {
+  const login = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{{NONCE}}'; img-src data:;">`;
+  const panel = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; ${Z}; ${D}; ${O}; script-src 'nonce-${B}'; ${M};\">";
+
+  it("adds the loopback to Claude's two meta tags and leaves other connect-src alone", () => {
+    const codex = 'function kz(){return [`connect-src ${n.join(" ")}`];}';
+    const out = relaxClaudeCspMetas(`${login}\n${panel}\n${codex}`);
+    expect(out).toContain("default-src 'none'; connect-src http://127.0.0.1:*; style-src 'unsafe-inline'");
+    expect(out).toContain("default-src 'none'; connect-src http://127.0.0.1:*; ${Z};");
+    expect(out).toContain('`connect-src ${n.join(" ")}`');
+    expect(relaxClaudeCspMetas(out)).toBe(out);
+    expect(jsParses(`const html = ${JSON.stringify(out)};\n${codex}`)).toBe(true);
   });
 });
 
@@ -75,8 +90,8 @@ describe("patch / restore", () => {
     const bundle = readFileSync(b.bundlePath, "utf8");
     expect(bundle).toContain("LATENT-START");
     expect(jsParses(bundle)).toBe(true);
-    expect(readFileSync(b.cspHostPath!, "utf8")).toBe(host0);
-    expect(existsSync(b.cspHostPath + ".latent-backup")).toBe(false);
+    expect(readFileSync(b.cspHostPath!, "utf8")).toContain("connect-src http://127.0.0.1:*");
+    expect(readFileSync(b.cspHostPath! + ".latent-backup", "utf8")).toBe(host0);
   });
 
   it("re-patching starts from pristine (no stacked sponsor blocks)", () => {
@@ -104,7 +119,7 @@ describe("patch / restore", () => {
     expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
     const after = readFileSync(b.cspHostPath!, "utf8");
     expect(after).not.toContain("LATENT-START");
-    expect(after).not.toContain("127.0.0.1");
+    expect(after).toContain("connect-src http://127.0.0.1:*");
     expect(readFileSync(b.bundlePath, "utf8")).toContain("LATENT-START");
   });
 
@@ -118,8 +133,8 @@ describe("patch / restore", () => {
 
     writeFileSync(b.cspHostPath! + ".latent-backup", host0);
     expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
-    expect(readFileSync(b.cspHostPath!, "utf8")).toBe(host0);
-    expect(existsSync(b.cspHostPath + ".latent-backup")).toBe(false);
+    expect(readFileSync(b.cspHostPath!, "utf8")).toContain("connect-src http://127.0.0.1:*");
+    expect(readFileSync(b.cspHostPath! + ".latent-backup", "utf8")).toBe(host0);
   });
 
   it("does not write the bundle when neither it nor its backup parses", () => {

@@ -380,6 +380,41 @@ export function isPatched(bundlePath: string): boolean {
   return fileIncludes(bundlePath, MARK_START);
 }
 
+const CLAUDE_LOGIN_CSP =
+  `content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{{NONCE}}'; img-src data:;"`;
+const CLAUDE_PANEL_CSP =
+  "content=\"default-src 'none'; ${Z}; ${D}; ${O}; script-src 'nonce-${B}'; ${M};\"";
+const LOOPBACK_CONNECT = "connect-src http://127.0.0.1:*; ";
+
+/**
+ * Claude's chat webview blocks fetch via two CSP meta tags in `extension.js`.
+ * The webview bundle only contains Monaco's `/connect-src/` tokenizer, which
+ * must stay untouched. Splice the loopback into those two tags and nowhere else.
+ */
+export function relaxClaudeCspMetas(content: string): string {
+  return content
+    .replaceAll(CLAUDE_LOGIN_CSP, CLAUDE_LOGIN_CSP.replace("default-src 'none'; ", `default-src 'none'; ${LOOPBACK_CONNECT}`))
+    .replaceAll(CLAUDE_PANEL_CSP, CLAUDE_PANEL_CSP.replace("default-src 'none'; ", `default-src 'none'; ${LOOPBACK_CONNECT}`));
+}
+
+/** One write of Claude's host module when the loopback allowance is missing. */
+export function patchClaudeHostCsp(extDir: string): "patched" | "unchanged" | "error" {
+  const host = extensionMainPath(extDir);
+  if (!existsSync(host)) return "unchanged";
+  try {
+    const original = readFileSync(host, "utf8");
+    const next = relaxClaudeCspMetas(original);
+    if (next === original) return "unchanged";
+    if (!jsParses(original) || !jsParses(next)) return "error";
+    const backup = host + BACKUP_SUFFIX;
+    if (!existsSync(backup)) writeFileSync(backup, original);
+    writeFileSync(host, next);
+    return "patched";
+  } catch {
+    return "error";
+  }
+}
+
 /** Add a 127.0.0.1 loopback allowance to any CSP connect-src in the bundle. */
 export function relaxCsp(content: string): string {
   // Broaden explicit connect-src directives. Directives are ';'-terminated
@@ -558,6 +593,7 @@ export function patch(bundle: AgentBundle, block: string): "patched" | "incompat
     if (!jsParses(next)) return "error";
     writeFileSync(bundle.bundlePath, next);
     if (cspHostPath) patchCspHostFile(bundle.extDir, cspHostPath);
+    if (bundle.agent === "claude-code") patchClaudeHostCsp(bundle.extDir);
     return "patched";
   } catch {
     return "error";
