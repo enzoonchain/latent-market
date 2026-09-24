@@ -69,3 +69,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" latent-protocol-vscode.vsix latent-protocol-vscode.vsix.sha256 --clobber
+
+      - name: Publish to Open VSX
+        working-directory: vscode-extension
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_TOKEN }}
+        run: npx --yes ovsx publish latent-protocol-vscode.vsix
