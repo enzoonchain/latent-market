@@ -380,21 +380,19 @@ export function isPatched(bundlePath: string): boolean {
   return fileIncludes(bundlePath, MARK_START);
 }
 
-const CLAUDE_LOGIN_CSP =
-  `content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{{NONCE}}'; img-src data:;"`;
-const CLAUDE_PANEL_CSP =
-  "content=\"default-src 'none'; ${Z}; ${D}; ${O}; script-src 'nonce-${B}'; ${M};\"";
 const LOOPBACK_CONNECT = "connect-src http://127.0.0.1:*; ";
 
 /**
- * Claude's chat webview blocks fetch via two CSP meta tags in `extension.js`.
- * The webview bundle only contains Monaco's `/connect-src/` tokenizer, which
- * must stay untouched. Splice the loopback into those two tags and nowhere else.
+ * Claude's chat webview blocks fetch via the CSP meta tags in `extension.js`.
+ * Claude 2.1.282 renamed the directive variables, so match the meta tag itself
+ * instead of one minified assignment. Leave every other `connect-src` alone,
+ * including Monaco's `/connect-src/` tokenizer and Codex's template literal.
  */
 export function relaxClaudeCspMetas(content: string): string {
-  return content
-    .replaceAll(CLAUDE_LOGIN_CSP, CLAUDE_LOGIN_CSP.replace("default-src 'none'; ", `default-src 'none'; ${LOOPBACK_CONNECT}`))
-    .replaceAll(CLAUDE_PANEL_CSP, CLAUDE_PANEL_CSP.replace("default-src 'none'; ", `default-src 'none'; ${LOOPBACK_CONNECT}`));
+  return content.replace(
+    /(<meta http-equiv="Content-Security-Policy" content="default-src 'none'; )(?!connect-src )/g,
+    `$1${LOOPBACK_CONNECT}`,
+  );
 }
 
 /** One write of Claude's host module when the loopback allowance is missing. */

@@ -13,7 +13,7 @@ import { classifyWorkspace, type Category } from "./classify.js";
 import { Loopback } from "./loopback.js";
 import { buildBlock, MARK_START } from "./block.js";
 import { buildCursorBlock, CURSOR_BUILD } from "./cursor-block.js";
-import { findAgentBundles, patch, patchClaudeHostCsp, restore } from "./patcher.js";
+import { findAgentBundles, isPatched, patch, patchClaudeHostCsp, restore } from "./patcher.js";
 import { refreshKillswitch, shouldServe } from "./health.js";
 import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 import { MIN_VIEW_MS, ViewabilityTracker, type MetricEvent } from "./metrics.js";
@@ -446,7 +446,9 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
   earningsBar?.setAccess(true, cfg.wallet);
 
   for (const b of findAgentBundles()) {
-    if (b.agent === "claude-code") patchClaudeHostCsp(b.extDir);
+    if (b.agent !== "claude-code" || !loopback) continue;
+    if (!isPatched(b.bundlePath)) patch(b, buildBlock(loopback.baseUrl, cfg.rotateSeconds, category));
+    else patchClaudeHostCsp(b.extDir);
   }
   syncCursorOverlay(false);
   startReassert(context);

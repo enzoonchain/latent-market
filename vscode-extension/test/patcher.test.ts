@@ -39,9 +39,11 @@ describe("relaxClaudeCspMetas", () => {
 
   it("adds the loopback to Claude's two meta tags and leaves other connect-src alone", () => {
     const codex = 'function kz(){return [`connect-src ${n.join(" ")}`];}';
-    const out = relaxClaudeCspMetas(`${login}\n${panel}\n${codex}`);
+    const panel282 = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; ${Z}; ${O}; ${L}; script-src 'nonce-${B}'; ${F};\">";
+    const out = relaxClaudeCspMetas(`${login}\n${panel}\n${panel282}\n${codex}`);
     expect(out).toContain("default-src 'none'; connect-src http://127.0.0.1:*; style-src 'unsafe-inline'");
-    expect(out).toContain("default-src 'none'; connect-src http://127.0.0.1:*; ${Z};");
+    expect(out).toContain("default-src 'none'; connect-src http://127.0.0.1:*; ${Z}; ${D};");
+    expect(out).toContain("default-src 'none'; connect-src http://127.0.0.1:*; ${Z}; ${O}; ${L};");
     expect(out).toContain('`connect-src ${n.join(" ")}`');
     expect(relaxClaudeCspMetas(out)).toBe(out);
     expect(jsParses(`const html = ${JSON.stringify(out)};\n${codex}`)).toBe(true);
