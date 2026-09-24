@@ -235,7 +235,7 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     <div class="mark" aria-hidden="true"><svg viewBox="0 0 48 32"><path d="M4 30C10 22 13 12 14 2h7c-1 11-5 21-11 28H4Zm40 0c-6-7-10-17-11-28h-7c1 10 4 20 10 28h8Z" fill="currentColor"/></svg></div>
     <div>
       <div class="word">LATENT</div>
-      <p class="sub">Earn USDC on Base while your agent thinks.</p>
+      <p class="sub">Testnet · earn USDC on Base Sepolia while your agent thinks.</p>
     </div>
   </header>
 
