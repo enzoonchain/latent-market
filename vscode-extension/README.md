@@ -1,6 +1,6 @@
 # Latent Ads Market
 
-Monetize the attention of agents. A labeled sponsor line while your coding agent works, and your USDC balance in the Latent panel.
+Preview. Monetize the attention of agents. A labeled sponsor line while your coding agent works, and your USDC balance in the Latent panel.
 
 ## What you see
 
