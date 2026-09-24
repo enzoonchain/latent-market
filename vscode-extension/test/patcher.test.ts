@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { claudeBundle, isPatched, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
+import { claudeBundle, codexBundle, injectCodexShimmer, isPatched, patch, relaxCsp, restore, type AgentBundle } from "../src/patcher.js";
 
 // Shapes taken from an installed Claude Code 2.1.278.
 const MONACO_TOKENIZER = 'tokenizer:{root:[[/child-src/,"string.quote"],[/connect-src/,"string.quote"],[/default-src/,"string.quote"]]}';
@@ -23,13 +23,13 @@ describe("claudeBundle", () => {
 });
 
 describe("isPatched", () => {
-  it("reads the marker from the tail, not from the start of a large file", () => {
+  it("sees a marker in the tail and one spliced into the middle of the file", () => {
     const dir = mkdtempSync(join(tmpdir(), "latent-tail-"));
     const file = join(dir, "index.js");
     writeFileSync(file, `${"x".repeat(80_000)}/* LATENT-START */`);
     expect(isPatched(file)).toBe(true);
-    writeFileSync(file, `/* LATENT-START */${"x".repeat(80_000)}`);
-    expect(isPatched(file)).toBe(false);
+    writeFileSync(file, `${"x".repeat(80_000)}/* LATENT-START */${"x".repeat(80_000)}`);
+    expect(isPatched(file)).toBe(true);
   });
 });
 
@@ -47,6 +47,14 @@ describe("relaxCsp", () => {
 
   it("adds connect-src next to default-src 'none' (the host file's CSP)", () => {
     expect(relaxCsp(HOST_CSP)).toContain("default-src 'none'; connect-src http://127.0.0.1:*; style-src");
+  });
+
+  it("widens Codex's template connect-src without breaking the interpolation", () => {
+    const js = 'function kz(){return ["default-src \'none\'",`connect-src ${n.join(" ")}`].join("; ");}';
+    const out = relaxCsp(js);
+    expect(out).toContain('http://127.0.0.1:* ${n.join(" ")}');
+    expect(out).not.toContain("default-src 'none'; connect-src");
+    expect(() => new Function(out)).not.toThrow();
   });
 });
 
@@ -107,5 +115,67 @@ describe("patch / restore", () => {
     expect(readFileSync(b.bundlePath, "utf8")).toBe(bundle0);
     expect(readFileSync(b.cspHostPath!, "utf8")).toBe(host0);
     expect(existsSync(b.cspHostPath + ".latent-backup")).toBe(false);
+  });
+});
+
+const CODEX_BUNDLE = [
+  'function yPt(e){return "loading-shimmer-pure-text";}',
+  'function vJt(e){return Z("loading-shimmer-pure-text", bK.cadencedShimmer);}',
+  'function yJt(e){return "Thinking";}',
+].join("");
+
+describe("codex shimmer injection", () => {
+  it("splices into the renderer that paints cadencedShimmer, not the sibling row", () => {
+    const block = "/* LATENT-START */;/* LATENT-END */";
+    const out = injectCodexShimmer(CODEX_BUNDLE, block);
+    expect(out).toBeTruthy();
+    const v = out!.indexOf("function vJt");
+    const mark = out!.indexOf("LATENT-START");
+    expect(mark).toBeGreaterThan(v);
+    expect(mark).toBeLessThan(out!.indexOf("function yJt"));
+    expect(out!.indexOf("LATENT-START")).toBe(out!.lastIndexOf("LATENT-START"));
+    expect(() => new Function(out!)).not.toThrow();
+  });
+
+  it("targets the shimmer chunk, not a file that only contains Thinking", () => {
+    const dir = mkdtempSync(join(tmpdir(), "latent-codex-"));
+    const assets = join(dir, "webview", "assets");
+    mkdirSync(assets, { recursive: true });
+    writeFileSync(join(assets, "locale.js"), 'var m="Thinking";');
+    const shimmer = join(assets, "app.js");
+    writeFileSync(shimmer, CODEX_BUNDLE);
+    writeFileSync(join(dir, "extension.js"), HOST_CSP);
+    const hit = codexBundle(dir);
+    expect(hit?.bundlePath).toBe(shimmer);
+    expect(hit?.cspHostPath).toBe(join(dir, "extension.js"));
+  });
+
+  it("patches the shimmer function, relaxes the host, and restores a stale chunk", () => {
+    const dir = mkdtempSync(join(tmpdir(), "latent-codex-patch-"));
+    const assets = join(dir, "webview", "assets");
+    mkdirSync(assets, { recursive: true });
+    const bundlePath = join(assets, "app.js");
+    writeFileSync(bundlePath, CODEX_BUNDLE);
+    const cspHostPath = join(dir, "extension.js");
+    const host0 = 'function kz(){return ["default-src \'none\'",`connect-src ${n.join(" ")}`].join("; ");}';
+    writeFileSync(cspHostPath, host0);
+    const stale = join(assets, "am.js");
+    writeFileSync(stale + ".latent-backup", "pristine-am");
+    writeFileSync(stale, "pristine-am\n/* LATENT-START */old/* LATENT-END */\n");
+    const b: AgentBundle = { agent: "codex", extDir: dir, bundlePath, cspHostPath };
+    expect(patch(b, "/* LATENT-START */;/* LATENT-END */")).toBe("patched");
+    const bundle = readFileSync(bundlePath, "utf8");
+    expect(bundle.indexOf("LATENT-START")).toBeGreaterThan(bundle.indexOf("function vJt"));
+    expect(bundle.indexOf("function yPt")).toBeLessThan(bundle.indexOf("LATENT-START"));
+    expect(() => new Function(bundle)).not.toThrow();
+    const host = readFileSync(cspHostPath, "utf8");
+    expect(() => new Function(host)).not.toThrow();
+    expect(host).toContain("127.0.0.1");
+    expect(readFileSync(stale, "utf8")).toBe("pristine-am");
+    patch(b, "/* LATENT-START */;/* LATENT-END */");
+    expect(readFileSync(bundlePath, "utf8").match(/LATENT-START/g)).toHaveLength(1);
+    expect(restore(b)).toBe(true);
+    expect(readFileSync(bundlePath, "utf8")).toBe(CODEX_BUNDLE);
+    expect(readFileSync(cspHostPath, "utf8")).toBe(host0);
   });
 });

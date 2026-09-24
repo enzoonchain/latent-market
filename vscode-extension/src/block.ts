@@ -45,15 +45,24 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       }
       return last;
     }
-    // Read-only. Claude's live row is spinnerRow_; Codex's live row is the
-    // thinking shimmer (the hashed class still contains cadencedShimmer).
-    // Never write into either: React tears the row out if a child changes.
+    // Read-only. Claude's live row is spinnerRow_. Codex's live row is the
+    // loading-shimmer the thinking renderer paints (the hashed class still
+    // contains cadencedShimmer). Visibility and a non-empty rect drop stale
+    // rows. Never write into the row: React tears it out if a child changes.
+    function shown(el){
+      if(!el || !el.getBoundingClientRect) return false;
+      var st; try { st = window.getComputedStyle(el); } catch(err){ return false; }
+      if(st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') return false;
+      var r = el.getBoundingClientRect();
+      return !!(r && (r.width || r.height));
+    }
     function spinner(){
       return lastMatch('[class*="spinnerRow_"]', function(el){
           return tokenStarts(el, "spinnerRow_") && (el.textContent || "").replace(/\\s/g, "") !== "";
         })
         || lastMatch('[class*="statusRow_"]', function(el){ return tokenStarts(el, "statusRow_"); })
-        || lastMatch('[class*="cadencedShimmer"]', null)
+        || lastMatch('[class*="loading-shimmer"]', shown)
+        || lastMatch('[class*="cadencedShimmer"]', shown)
         || document.querySelector('[data-latent-spinner]');
     }
     function busy(){ var s = spinner(); return !!(s && s.offsetParent !== null); }

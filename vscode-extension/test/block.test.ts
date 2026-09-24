@@ -24,6 +24,7 @@ describe("buildBlock", () => {
     expect(block).toContain("position:fixed");
     expect(block).toContain("r.bottom");
     expect(block).toContain("cadencedShimmer");
+    expect(block).toContain("loading-shimmer");
     expect(block).toContain("statusRow_");
     expect(block).toContain("data-latent-spinner");
     expect(block).not.toContain("editor-background");

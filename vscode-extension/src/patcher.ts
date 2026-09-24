@@ -2,11 +2,14 @@
  * Agent-bundle patcher (advanced / invasive path).
  *
  * Locates an installed Claude Code / Codex (ChatGPT) editor extension, and —
- * only when the user opts in — appends the LATENT block to its webview bundle so
- * the sponsor line renders inside the agent's own spinner. Every change is
- * reversible: a pristine `.latent-backup` is written before the first edit, the
- * block is marker-delimited, and `restore()` puts the original bytes back and
- * removes the CSP relaxation.
+ * only when the user opts in — installs the LATENT block so the sponsor line
+ * renders inside the agent's own spinner. Claude Code gets the block appended
+ * to webview/index.js. Codex gets it spliced into the thinking-shimmer
+ * renderer (the function that paints loading-shimmer-pure-text), which is the
+ * function the panel actually calls. Every change is reversible: a pristine
+ * `.latent-backup` is written before the first edit, the block is
+ * marker-delimited, and `restore()` puts the original bytes back and removes
+ * the CSP relaxation.
  *
  * This modifies a third-party signed extension and relaxes its webview CSP to
  * reach the 127.0.0.1 loopback — the CSP usually lives in a separate host file
@@ -102,6 +105,43 @@ function findBundleJs(dir: string): string | null {
   return findFileWithAnchor(dir, VERB_ANCHORS);
 }
 
+/** Like findFileWithAnchor, but every anchor must occur in the same file. */
+function findFileWithAllAnchors(dir: string, anchors: readonly string[], depth = 0): string | null {
+  if (depth > 5) return null;
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return null;
+  }
+  const subdirs: string[] = [];
+  for (const name of entries) {
+    const p = join(dir, name);
+    let st;
+    try {
+      st = statSync(p);
+    } catch {
+      continue;
+    }
+    if (st.isDirectory()) {
+      if (name === "node_modules") continue;
+      subdirs.push(p);
+    } else if (name.endsWith(".js") && st.size < 16_000_000) {
+      try {
+        const head = readFileSync(p, "utf8");
+        if (anchors.every((v) => head.includes(v))) return p;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  for (const sd of subdirs) {
+    const hit = findFileWithAllAnchors(sd, anchors, depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 function findCspHostJs(dir: string): string | null {
   return findFileWithAnchor(dir, [CSP_META_ANCHOR]);
 }
@@ -135,6 +175,19 @@ export function claudeBundle(extDir: string): Pick<AgentBundle, "bundlePath" | "
   if (!existsSync(bundlePath)) return null;
   const host = join(extDir, "extension.js");
   return { bundlePath, cspHostPath: existsSync(host) ? host : null };
+}
+
+/**
+ * Codex (openai.chatgpt) paints its thinking row from the function that emits
+ * both `loading-shimmer-pure-text` and the `cadencedShimmer` class. That file
+ * is the bundle. The word "Thinking" also appears in locale chunks; those are
+ * not the renderer.
+ */
+export function codexBundle(extDir: string): Pick<AgentBundle, "bundlePath" | "cspHostPath"> | null {
+  const bundlePath = findFileWithAllAnchors(extDir, ["loading-shimmer-pure-text", "cadencedShimmer"]);
+  if (!bundlePath) return null;
+  const cspHost = findCspHostJs(extDir);
+  return { bundlePath, cspHostPath: cspHost && cspHost !== bundlePath ? cspHost : null };
 }
 
 const TAIL_BYTES = 64 * 1024;
@@ -212,6 +265,13 @@ function locateAgentBundles(): AgentBundle[] {
         seen.add(agent);
         continue;
       }
+      if (agent === "codex") {
+        const hit = codexBundle(extDir);
+        if (!hit) continue;
+        out.push({ agent, extDir, bundlePath: hit.bundlePath, cspHostPath: hit.cspHostPath });
+        seen.add(agent);
+        continue;
+      }
       const bundle = findBundleJs(extDir);
       if (bundle) {
         const cspHost = findCspHostJs(extDir);
@@ -223,8 +283,21 @@ function locateAgentBundles(): AgentBundle[] {
   return out;
 }
 
+/** Tail fast-path, then the whole file. The Codex block sits inside the
+ *  shimmer function, not at the end of the bundle. */
+export function fileIncludes(path: string, needle: string): boolean {
+  if (tailIncludes(path, needle)) return true;
+  try {
+    const st = statSync(path);
+    if (st.size > 16_000_000) return false;
+    return readFileSync(path, "utf8").includes(needle);
+  } catch {
+    return false;
+  }
+}
+
 export function isPatched(bundlePath: string): boolean {
-  return tailIncludes(bundlePath, MARK_START);
+  return fileIncludes(bundlePath, MARK_START);
 }
 
 /** Add a 127.0.0.1 loopback allowance to any CSP connect-src in the bundle. */
@@ -239,11 +312,25 @@ export function relaxCsp(content: string): string {
   // Code's webview ships one (Monaco's CSP syntax tokenizer:
   // `[/connect-src/,"string.quote"]`); matching it spliced " http://…" into
   // the regex and left a SyntaxError that broke the whole webview on load.
-  let out = content.replace(/(?<!\/)connect-src(?!\/)([^;"`]*)/g, (m, rest) =>
-    rest.includes("127.0.0.1") ? m : `connect-src${rest} http://127.0.0.1:*`,
+  // Stop at `$` as well as quotes. Codex builds the directive as
+  // `connect-src ${n.join(" ")}`; consuming through the `$` splices the
+  // allowance into the template expression and leaves a SyntaxError.
+  let out = content.replace(/(?<!\/)connect-src(?!\/)([^;"`$]*)/g, (m, rest, offset) => {
+    if (rest.includes("127.0.0.1")) return m;
+    const next = content[offset + m.length];
+    // Keep the allowance a separate CSP token when the rest of the directive
+    // is a ${...} interpolation (`connect-src ${n.join(" ")}`).
+    const glue = next === "$" ? " " : "";
+    return `connect-src${rest} http://127.0.0.1:*${glue}`;
+  });
+  // A lone `default-src 'none'` that already sits in a longer policy (a ';'
+  // follows before the string ends) gets its own connect-src. A short
+  // `"default-src 'none'"` next to a real connect-src directive — Codex's
+  // CSP array — is left alone, or the earlier directive would shadow it.
+  out = out.replace(
+    /default-src 'none'(?=[^"'`;]*;)/g,
+    "default-src 'none'; connect-src http://127.0.0.1:*",
   );
-  // Some builds only set default-src 'none' — add a connect-src alongside it.
-  out = out.replace(/default-src 'none'/g, "default-src 'none'; connect-src http://127.0.0.1:*");
   return out;
 }
 
@@ -266,6 +353,79 @@ function patchCspHostFile(hostPath: string): void {
   }
 }
 
+const SHIMMER_TEXT = "loading-shimmer-pure-text";
+const SHIMMER_CLASS = "cadencedShimmer";
+
+/**
+ * Splice the sponsor block into the function that paints the live thinking
+ * shimmer — the one whose body contains both the loading-shimmer text class
+ * and cadencedShimmer. Sibling rows mention loading-shimmer-pure-text alone
+ * and are left untouched. Returns null when this build has no such function.
+ */
+export function injectCodexShimmer(content: string, block: string): string | null {
+  const stripped = stripLatentBlock(content);
+  const open = findShimmerBodyOpen(stripped);
+  if (open < 0) return null;
+  return stripped.slice(0, open + 1) + block + stripped.slice(open + 1);
+}
+
+function findShimmerBodyOpen(content: string): number {
+  let from = 0;
+  while (from < content.length) {
+    const hit = content.indexOf(SHIMMER_TEXT, from);
+    if (hit < 0) return -1;
+    let scan = hit;
+    while (scan > 0) {
+      const fn = content.lastIndexOf("function ", scan);
+      if (fn < 0) break;
+      const open = content.indexOf("{", fn);
+      if (open > fn && open < hit) {
+        const nextFn = content.indexOf("function ", open + 1);
+        const end = nextFn === -1 ? Math.min(content.length, open + 6000) : nextFn;
+        const body = content.slice(open, end);
+        if (body.includes(SHIMMER_TEXT) && body.includes(SHIMMER_CLASS)) return open;
+      }
+      scan = fn - 1;
+    }
+    from = hit + SHIMMER_TEXT.length;
+  }
+  return -1;
+}
+
+/** A previous locator appended the block to whichever chunk contained the
+ *  word "Thinking". Those backups are not the shimmer bundle; put them back. */
+function retireStaleBundles(extDir: string, keep: readonly string[]): void {
+  const backups: string[] = [];
+  collectBackups(extDir, 0, backups);
+  for (const backup of backups) {
+    const js = backup.slice(0, -BACKUP_SUFFIX.length);
+    if (keep.includes(js)) continue;
+    restoreFile(js);
+  }
+}
+
+function collectBackups(dir: string, depth: number, out: string[]): void {
+  if (depth > 6) return;
+  let names: string[] = [];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (name === "node_modules") continue;
+    const p = join(dir, name);
+    let st;
+    try {
+      st = statSync(p);
+    } catch {
+      continue;
+    }
+    if (st.isDirectory()) collectBackups(p, depth + 1, out);
+    else if (name.endsWith(".js" + BACKUP_SUFFIX)) out.push(p);
+  }
+}
+
 /** Drop our marker block. Foreign markers (e.g. VIBE-ADS) are left in place. */
 export function stripLatentBlock(content: string): string {
   const s = content.indexOf(MARK_START);
@@ -277,10 +437,6 @@ export function stripLatentBlock(content: string): string {
 export function patch(bundle: AgentBundle, block: string): "patched" | "incompatible" | "error" {
   try {
     const original = readFileSync(bundle.bundlePath, "utf8");
-    if (!VERB_ANCHORS.some((v) => original.includes(v)) && !VERB_ANCHORS.some((v) => stripLatentBlock(original).includes(v))) {
-      return "incompatible";
-    }
-
     const backup = bundle.bundlePath + BACKUP_SUFFIX;
     if (!existsSync(backup)) {
       // Fossil: a live file that already carries our block has no pristine copy.
@@ -291,6 +447,18 @@ export function patch(bundle: AgentBundle, block: string): "patched" | "incompat
 
     // Start from pristine so re-patching never stacks blocks.
     const pristine = readFileSync(backup, "utf8");
+    if (bundle.agent === "codex") {
+      const injected = injectCodexShimmer(pristine, block);
+      if (!injected) return "incompatible";
+      writeFileSync(bundle.bundlePath, injected);
+      if (bundle.cspHostPath) patchCspHostFile(bundle.cspHostPath);
+      retireStaleBundles(bundle.extDir, [bundle.bundlePath, bundle.cspHostPath].filter((p): p is string => !!p));
+      return "patched";
+    }
+
+    if (!VERB_ANCHORS.some((v) => pristine.includes(v)) && !VERB_ANCHORS.some((v) => original.includes(v))) {
+      return "incompatible";
+    }
     const relaxed = relaxCsp(pristine);
     writeFileSync(bundle.bundlePath, relaxed + "\n" + block + "\n");
     if (bundle.cspHostPath) patchCspHostFile(bundle.cspHostPath);
@@ -305,6 +473,9 @@ export function restore(bundle: AgentBundle): boolean {
   // Best effort, and kept out of the return value so it can't hide a
   // successful bundle restore from the caller's count.
   if (bundle.cspHostPath) restoreFile(bundle.cspHostPath);
+  if (bundle.agent === "codex") {
+    retireStaleBundles(bundle.extDir, [bundle.bundlePath, bundle.cspHostPath].filter((p): p is string => !!p));
+  }
   return ok;
 }
 
