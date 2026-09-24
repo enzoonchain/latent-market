@@ -202,7 +202,7 @@ test("requestAd circuit breaker: a run of 5xx trips it, a 204 no-fill does not",
   });
   const base = `http://127.0.0.1:${s.port}`;
   const call = () =>
-    requestAd({ wallet: "0x1", context: "general", agent: "codex", surface: "hook", server: base });
+    requestAd({ wallet: "0x1", context: "general", agent: "claude-code", surface: "status_line", server: base });
   try {
     for (let i = 0; i < ks.GUARD_TRIP_AFTER; i++) await call();
     assert.equal(ks.shouldServe().ok, false, "5xx run did not trip the guard");

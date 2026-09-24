@@ -129,7 +129,6 @@ not Hermes `ads.wallet` keys.
 /ads setup email you@domain — get a wallet you claim with your email
 /ads setup use 0x..         — use your existing address
 /ads balance                — balance & cash-out (opens on the dashboard; payouts need a wallet signature)
-/ads on / off               — resume / pause the footer for this session
 /ads settings               — view current config
 ```
 
@@ -137,24 +136,22 @@ not Hermes `ads.wallet` keys.
 
 | Surface | How | Status |
 |---------|-----|--------|
-| Response footer (CLI, TUI, Desktop chat) | `transform_llm_output` — a labelled "Sponsored" footer; Hermes applies it before the reply is stored and delivered, so the billed impression is the one shown | ✅ |
-| Hermes gateway (Telegram, Discord, …) | Same footer, platform-formatted | ✅ Same install as CLI |
 | Hermes Desktop status bar | Desktop Plugin SDK (`desktop/plugin.js`): one sponsored line, popover with CTA + dashboard link; impression once per creative, only while the window is visible | ✅ via `npx init` when a wallet is configured |
 | WebUI footer | WebUI extension `latent-ads` (the WebUI does **not** load Hermes plugins) installed into its managed extension dir; the API origin goes into the documented `HERMES_WEBUI_CSP_CONNECT_EXTRA` in the WebUI `.env`. No WebUI source file is edited — manage it under Settings → Extensions | ✅ via `npx init` when `static/` is found (restart the WebUI) |
 
-`pre_llm_call` is deliberately **not** used: its return value is appended to the
-user's message and reaches only the model, never the user.
-
-Footer links go through `GET /ad/click?ad=…&w=…&t=<click_token>`: the server
-credits the click and 302s to the advertiser's stored URL.
+The Python side of the plugin registers **no** LLM hooks or middleware
+(`pre_llm_call`, `transform_llm_output`, `llm_request`): it never touches a
+request to the model or the model's reply. The Hermes CLI / TUI and the
+messaging gateway therefore show no ads; the plugin only adds `/ads` there.
+Re-running `init` replaces an older footer-appending plugin in place.
 
 ### Hermes Desktop
 
 [Hermes Desktop](https://hermes-agent.nousresearch.com/docs/user-guide/desktop)
 runs a headless `hermes serve` backend against the **same** `HERMES_HOME`
-(`~/.hermes`) and plugin directory as the CLI, so the footer and `/ads` work in
-Desktop chat with no extra setup. The `desktop/plugin.js` in the same folder
-adds the status-bar line. Wallet and device id are baked in at install time —
+(`~/.hermes`) and plugin directory as the CLI, so `/ads` works in Desktop chat
+with no extra setup. The `desktop/plugin.js` in the same folder adds the
+status-bar line — the only Hermes-native ad surface. Wallet and device id are baked in at install time —
 re-run `npx latent-protocol init` after changing wallets.
 
 ---

@@ -6,14 +6,10 @@ import { buildScanReport, formatScanReport } from "./scan.js";
 import { DEFAULT_SCAN_DAYS } from "./scanners/types.js";
 import { installHermes } from "./surfaces/hermes.js";
 import { installOpenclaw } from "./surfaces/openclaw.js";
-import {
-  CODEX_AGENTS,
-  codexDetected,
-  installCodexFamily,
-} from "./surfaces/codex.js";
+import { codexLegacyInstalled, uninstallCodexFamily } from "./surfaces/codex.js";
 import { installClaudeCode } from "./surfaces/claude-code.js";
 import { installGrok } from "./surfaces/grok.js";
-import { installMimo } from "./surfaces/mimo.js";
+import { mimoLegacyInstalled, uninstallMimo } from "./surfaces/mimo.js";
 import { formatDetectionTable, formatSurfaceMatrix } from "./detect.js";
 
 export interface PrelaunchOpts extends WalletOpts {
@@ -105,15 +101,15 @@ export async function runActivate(): Promise<void> {
   saveConfig({ enabled: true, mode: "live", frequency: 1 });
 
   const detected = detectAgents();
-  const codexAgents = CODEX_AGENTS.filter(codexDetected);
   const lines: string[] = [];
 
   if (detected.claudeCode) lines.push(installClaudeCode());
   if (detected.grok) lines.push(installGrok());
   if (detected.hermes || detected.hermesWebui) lines.push(installHermes());
   if (detected.openclaw) lines.push(installOpenclaw());
-  if (codexAgents.length > 0) lines.push(installCodexFamily());
-  if (detected.mimo) lines.push(installMimo());
+  // No longer supported (they rewrote the LLM call); strip old installs.
+  if (codexLegacyInstalled()) lines.push(uninstallCodexFamily());
+  if (mimoLegacyInstalled()) lines.push(uninstallMimo());
 
   if (!lines.length) {
     console.log("No supported agents detected to patch.");

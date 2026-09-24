@@ -150,7 +150,7 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
   // On Claude Code the status line is the only thing the user actually sees,
   // so it owns the impression: it bills for exactly what it puts on screen,
   // once, whoever fetched the ad. The turn hook deliberately does not bill
-  // (see HOOK_OWNS_IMPRESSION in hook.ts) — if both did, one displayed ad
+  // (see resetDwell in hook.ts) — if both did, one displayed ad
   // would be charged to the advertiser twice.
   //
   // Billing is deferred, not immediate: this script re-runs as a fresh

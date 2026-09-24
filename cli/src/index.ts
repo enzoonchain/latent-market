@@ -29,20 +29,14 @@ import {
   openclawStatus,
   uninstallOpenclaw,
 } from "./surfaces/openclaw.js";
-import {
-  CODEX_AGENTS,
-  codexDetected,
-  codexFamilyStatus,
-  installCodexFamily,
-  uninstallCodexFamily,
-} from "./surfaces/codex.js";
-import { installMimo, mimoStatus, uninstallMimo } from "./surfaces/mimo.js";
+import { codexFamilyStatus, codexLegacyInstalled, uninstallCodexFamily } from "./surfaces/codex.js";
+import { mimoLegacyInstalled, mimoStatus, uninstallMimo } from "./surfaces/mimo.js";
 import {
   installVscode,
   uninstallVscode,
   vscodeStatus,
 } from "./surfaces/vscode.js";
-import { runHook, type HookAgent, type HookEvent } from "./hook.js";
+import { runHook, type HookEvent } from "./hook.js";
 import { runPrelaunch, runActivate } from "./prelaunch.js";
 import { DEFAULT_SCAN_DAYS } from "./scanners/types.js";
 
@@ -54,7 +48,7 @@ Usage:
   npx latent-protocol status
   npx latent-protocol uninstall
   npx latent-protocol statusline [--install|--uninstall]
-  npx latent-protocol hook <event> --agent <codex|claude-code>
+  npx latent-protocol hook <event> --agent claude-code
   npx latent-protocol prelaunch [--yes] [--wallet 0x…] [--email you@domain] [--days 30]
   npx latent-protocol activate
   npx latent-protocol help
@@ -64,19 +58,17 @@ Commands:
   prelaunch    Pre-launch signup: wallet + local scan + register (ads OFF)
   activate     Enable ads and patch surfaces (after public launch)
   status       Show config, balance, and patched surfaces
-  uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + Codex + MiMo + VS Code patches
+  uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + VS Code patches (+ old Codex / MiMo installs)
   statusline   Claude Code / Grok status-line renderer (stdin → stdout)
   hook         Turn-lifecycle hook runtime (invoked by installed hooks)
 
 Surfaces auto-installed when detected:
-  • Hermes CLI / gateway (Telegram, Discord, …) — agent-ads plugin
+  • Hermes Desktop — agent-ads plugin, status-bar sponsored line
   • Hermes WebUI — extension latent-ads (Settings → Extensions), no source edits
   • Claude Code — statusLine + turn hooks (staged to ~/.latent-protocol/bin, run via node)
                   + spinnerVerbs thinking-shimmer line on CC >= 2.1.143
   • Grok Build — status line in ~/.grok/config.toml (same staged statusline.mjs)
   • OpenClaw — sponsored footer on the final reply (all channels)
-  • Codex — turn hooks in hooks.json (staged bundle, run via node)
-  • MiMo Code — native plugin (~/.config/mimocode/plugins), response footer
   • Cursor / VS Code — extension auto-installed via the code/cursor CLI when detected
 `);
 }
@@ -132,19 +124,16 @@ async function cmdInit(args: string[]): Promise<void> {
   console.log(formatDetectionTable(detected));
   console.log();
 
-  const codexAgents = CODEX_AGENTS.filter(codexDetected);
   const anyAgent =
     detected.claudeCode ||
     detected.hermes ||
     detected.hermesWebui ||
     detected.openclaw ||
-    detected.grok ||
-    detected.mimo ||
-    codexAgents.length > 0;
+    detected.grok;
 
   if (!anyAgent) {
     console.log(
-      "No Claude Code / Grok / Hermes / Hermes WebUI / OpenClaw / Codex / MiMo install found.\n" +
+      "No Claude Code / Grok / Hermes / Hermes WebUI / OpenClaw install found.\n" +
         "Install an agent first, or pass --yes to still create a wallet/config.",
     );
     if (!flags.yes && !flags.wallet && !flags.email) {
@@ -190,12 +179,14 @@ async function cmdInit(args: string[]): Promise<void> {
     console.log(installOpenclaw());
     console.log();
   }
-  if (codexAgents.length > 0) {
-    console.log(installCodexFamily());
+  // Codex and MiMo are no longer supported (their only surfaces rewrote the
+  // LLM call or its output); strip what an older release installed.
+  if (codexLegacyInstalled()) {
+    console.log(uninstallCodexFamily());
     console.log();
   }
-  if (detected.mimo) {
-    console.log(installMimo());
+  if (mimoLegacyInstalled()) {
+    console.log(uninstallMimo());
     console.log();
   }
   if (detected.vscode) {
@@ -292,10 +283,12 @@ async function cmdHook(args: string[]): Promise<void> {
     // Unknown event — stay silent, never disturb the host agent.
     return;
   }
-  let agent: HookAgent = "codex";
+  // No default: hooks.json entries from older releases pass `--agent codex`,
+  // which runHook ignores.
+  let agent = "";
   for (let i = 1; i < args.length; i++) {
-    if (args[i] === "--agent" && args[i + 1]) agent = args[++i] as HookAgent;
-    else if (args[i]!.startsWith("--agent=")) agent = args[i]!.slice("--agent=".length) as HookAgent;
+    if (args[i] === "--agent" && args[i + 1]) agent = args[++i]!;
+    else if (args[i]!.startsWith("--agent=")) agent = args[i]!.slice("--agent=".length);
   }
   try {
     const payload = await readSessionFromStdin();
