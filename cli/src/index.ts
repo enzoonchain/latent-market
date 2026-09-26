@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { formatHolding, getHoldingStatus } from "./holding.js";
 import {
   canonicalizeServer,
   configFile,
@@ -228,6 +229,8 @@ async function cmdStatus(): Promise<void> {
   if (wallet) {
     const bal = await getBalance(wallet, server);
     console.log(`  Balance: $${bal.toFixed(4)} USDC`);
+    const holding = await getHoldingStatus(wallet, server);
+    if (holding) for (const line of formatHolding(holding)) console.log(line);
   }
   console.log();
   console.log("Surfaces:");

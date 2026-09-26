@@ -238,6 +238,90 @@ paths:
                     type: array
                     items: { type: object }
 
+  # ── Block system (read-only, public) ─────────────────────────────────────
+  # Adapters never need these to serve ads; the CLI and dashboards read them.
+  # Servers without the block system answer 404/503 — treat that as "absent".
+
+  /accounts/status:
+    get:
+      summary: Holding tier and today's effective viewer boost for a wallet
+      operationId: getHoldingStatus
+      description: Used by `latent status`. The tier is computed at each daily close from the 7-day average LATENT balance of every wallet linked to the same login.
+      parameters:
+        - name: wallet
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/WalletAddress" }
+      responses:
+        "200":
+          description: Tier and boost
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wallet: { $ref: "#/components/schemas/WalletAddress" }
+                  linked: { type: boolean }
+                  tier: { type: integer, minimum: 0, example: 1 }
+                  twab_tokens: { type: string, description: "7-day average, token base units (18 decimals)" }
+                  tier_thresholds: { type: array, items: { type: string } }
+                  boost_bps: { type: integer, description: "Tier boost over the base rate, bps" }
+                  boost_daily_cap: { type: integer, description: "Boosted impressions per day" }
+                  effective_scale_bps: { type: integer, description: "Budget scale applied to boosts, bps" }
+                  effective_boost_bps: { type: integer }
+
+  /spotlight:
+    get:
+      summary: Today's top advertisers by delivered spend (top 5)
+      operationId: getSpotlight
+      responses:
+        "200":
+          description: Spotlight entries (empty before the block system starts)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  day: { type: [integer, "null"] }
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rank: { type: integer }
+                        name: { type: string }
+                        title: { type: string }
+                        body: { type: string }
+                        cta_url: { type: string, format: uri }
+                        cpm: { type: number }
+                        delivered_impressions: { type: integer }
+                        delivered_spend: { type: number }
+
+  /blocks/market:
+    get:
+      summary: Today's block supply per surface (ambient = CLI, premium = IDE)
+      operationId: getBlockMarket
+      responses:
+        "200":
+          description: Supply and floor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  day: { type: integer }
+                  surfaces:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        mint_blocks: { type: integer }
+                        sold_blocks: { type: integer }
+                        available_blocks: { type: integer }
+                        floor_per_block: { type: integer, description: "CPM, stablecoin base units (6 decimals)" }
+        "503":
+          description: The block market is not open
+
 components:
   schemas:
     WalletAddress:

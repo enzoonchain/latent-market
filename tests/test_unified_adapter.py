@@ -137,7 +137,7 @@ class TestWrap:
         adapter = self._make(platform="cli")
         adapter.wrap("Hello", context="defi")
         adapter._tracker.log_impression.assert_called_once_with(
-            "ad-1", "0xDEADBEEF", "tok-abc"
+            "ad-1", "0xDEADBEEF", "tok-abc", event_uuid=None
         )
 
 

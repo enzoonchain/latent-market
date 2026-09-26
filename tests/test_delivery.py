@@ -51,7 +51,7 @@ def test_confirm_display_posts_impression():
     tracker = MagicMock()
     ad = {"ad_id": "a1", "impression_token": "tok"}
     assert confirm_display(tracker, ad, "0xABC") is True
-    tracker.log_impression.assert_called_once_with("a1", "0xABC", "tok")
+    tracker.log_impression.assert_called_once_with("a1", "0xABC", "tok", event_uuid=None)
 
 
 def test_confirm_if_displayed_requires_marker():

@@ -76,6 +76,34 @@ const routes = {
 
   "GET /ad/top-bid": (_body, _url, res) => send(res, 200, { top_bid: BID }),
 
+  // Block system (read-only). MOCK_TIER=0..3 sets the tier `latent status` shows.
+  "GET /accounts/status": (_body, url, res) => {
+    const tier = Number(process.env.MOCK_TIER ?? 1);
+    const T = "000000000000000000";
+    send(res, 200, {
+      wallet: (url.searchParams.get("wallet") ?? "").toLowerCase(),
+      linked: tier > 0,
+      tier,
+      twab_tokens: `${[0, 60000, 300000, 1500000][tier] ?? 0}${T}`,
+      tier_thresholds: [`50000${T}`, `250000${T}`, `1000000${T}`],
+      boost_bps: [0, 1000, 2000, 5000][tier] ?? 0,
+      boost_daily_cap: [0, 50, 100, 200][tier] ?? 0,
+      effective_scale_bps: 10000,
+      effective_boost_bps: [0, 1000, 2000, 5000][tier] ?? 0,
+    });
+  },
+
+  "GET /spotlight": (_body, _url, res) => send(res, 200, { day: 0, entries: [] }),
+
+  "GET /blocks/market": (_body, _url, res) =>
+    send(res, 200, {
+      day: 0,
+      surfaces: {
+        ambient: { mint_blocks: 80, sold_blocks: 12, available_blocks: 68, floor_per_block: 5000000 },
+        premium: { mint_blocks: 20, sold_blocks: 3, available_blocks: 17, floor_per_block: 5000000 },
+      },
+    }),
+
   "POST /ad/request": (body, _url, res) => {
     requestCount++;
     if (NO_FILL_EVERY > 0 && requestCount % NO_FILL_EVERY === 0) {
