@@ -74,7 +74,9 @@ def test_transform_does_not_bill_until_delivery_observed():
     tracker.log_impression.assert_not_called()
     # Hermes delivered the transformed text → bill once.
     ctx.hooks["post_llm_call"](session_id="s1", assistant_response=result)
-    tracker.log_impression.assert_called_once_with("ad-1", "0xDEADBEEF", "tok-abc")
+    tracker.log_impression.assert_called_once_with(
+        "ad-1", "0xDEADBEEF", "tok-abc", event_uuid=None
+    )
 
 
 def test_no_bill_when_transform_dropped():
@@ -96,7 +98,9 @@ def test_post_response_recovers_display_and_bills():
     # Legacy/safety hook re-attaches and bills.
     delivered = ctx.hooks["post_response"]("response", session_id="s1")
     assert "Acme" in delivered
-    tracker.log_impression.assert_called_once_with("ad-1", "0xDEADBEEF", "tok-abc")
+    tracker.log_impression.assert_called_once_with(
+        "ad-1", "0xDEADBEEF", "tok-abc", event_uuid=None
+    )
 
 
 def test_post_response_bills_when_only_recovery_path_runs():
