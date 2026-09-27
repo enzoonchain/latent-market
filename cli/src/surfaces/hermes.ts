@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { detectAgents, findHermesWebuiStatic } from "../detect.js";
-import { deviceId, loadConfig, resolveServer, resolveWallet, saveConfig } from "../config.js";
+import { ensureDeviceCredential, loadConfig, resolveServer, resolveWallet, saveConfig } from "../config.js";
 import { isValidAddress } from "../wallet.js";
 import { templatePath } from "../pkg.js";
 import {
@@ -65,7 +65,9 @@ export function writeDesktopPlugin(
   const wallet = isValidAddress(opts.wallet) ? opts.wallet : "";
   const server = opts.server.replace(/\/+$/, "");
   const raw = readFileSync(src, "utf8");
-  const device = /^[0-9a-f]{8,64}$/i.test(opts.deviceId ?? "") ? opts.deviceId! : "";
+  const device = /^(?:[0-9a-f]{8,64}|[0-9a-f]{32}\.\d+\.[A-Za-z0-9_-]+)$/i.test(opts.deviceId ?? "")
+    ? opts.deviceId!
+    : "";
   const rendered = templateOnce(
     templateOnce(
       templateOnce(raw, "__SERVER__", JSON.stringify(server)),
@@ -174,7 +176,7 @@ function legacyCleanupLines(staticDir: string, server: string): string[] {
 
 /** nesquena/hermes-webui runs its own agent loop and does not load Hermes
  *  plugins, so it gets a WebUI extension (see hermes-webui.ts). */
-function installHermesWebuiSurface(): string {
+function installHermesWebuiSurface(deviceCredential: string): string {
   const cfg = loadConfig();
   const wallet = resolveWallet(cfg);
   const server = resolveServer(cfg);
@@ -203,8 +205,7 @@ function installHermesWebuiSurface(): string {
     staticDir: dir,
     server,
     wallet,
-    deviceId: deviceId(),
-    frequency: cfg.frequency ?? 1,
+    deviceId: deviceCredential,
   });
   if (!res.ok) {
     lines.push(`⚠️  Hermes WebUI: ${res.error}`);
@@ -220,21 +221,22 @@ function installHermesWebuiSurface(): string {
   return lines.join("\n");
 }
 
-export function installHermes(): string {
+export async function installHermes(): Promise<string> {
   const detected = detectAgents();
   if (!detected.hermes && !detected.hermesWebui) {
     return "ℹ️  Hermes / Hermes WebUI not detected — skipped.";
   }
 
   const lines: string[] = [];
+  const cfg = loadConfig();
+  const credential = await ensureDeviceCredential(resolveServer(cfg));
   if (detected.hermes) {
     mkdirSync(detected.paths.hermesPlugins, { recursive: true });
-    const cfg = loadConfig();
     lines.push(
       writeFlatPlugin(detected.paths.hermesPlugins, {
         server: resolveServer(cfg),
         wallet: resolveWallet(cfg),
-        deviceId: deviceId(),
+        deviceId: credential,
       }),
     );
     lines.push(enableHermesPlugin());
@@ -244,7 +246,7 @@ export function installHermes(): string {
       "ℹ️  Hermes home not found — installing WebUI DOM patch only (CLI plugin skipped).",
     );
   }
-  lines.push(installHermesWebuiSurface());
+  lines.push(installHermesWebuiSurface(credential));
   return lines.join("\n");
 }
 

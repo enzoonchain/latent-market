@@ -68,23 +68,29 @@ describe("reply_payload_sending footer", () => {
     expect(text.startsWith("Here is the answer about solidity\n\n> Move assets to Base")).toBe(true);
     expect(text).toMatch(/ · _Sponsored: \+\$[^ ]+ USDC_$/);
     expect(text).toContain(`${SERVER}/ad/click?ad=ad-1&w=${WALLET}&t=clk-tok`);
-    expect(calls.map((c) => c.url)).toEqual([`${SERVER}/ad/request`]); // not billed yet
+    expect(calls.filter((c) => c.url.includes("/ad/")).map((c) => c.url)).toEqual([
+      `${SERVER}/ad/request`,
+    ]); // not billed yet
 
-    const req = calls[0]!.body;
+    const req = calls.find((c) => c.url.endsWith("/ad/request"))!.body;
     expect(req.surface).toBe("response_footer");
     expect(req.context).not.toContain("solidity answer"); // a slug, never the text
     expect(req.context.length).toBeLessThan(20);
 
     await hooks.message_sent({ to: "x", content: "unrelated", success: true, sessionKey: "s1" }, CTX);
-    expect(calls.length).toBe(1); // footer not in this send
+    expect(calls.filter((c) => c.url.endsWith("/ad/impression"))).toHaveLength(0);
     await hooks.message_sent({ to: "x", content: text, success: false, sessionKey: "s1" }, CTX);
-    expect(calls.length).toBe(1); // failed delivery is not billed
+    expect(calls.filter((c) => c.url.endsWith("/ad/impression"))).toHaveLength(0);
     await hooks.message_sent({ to: "x", content: text, success: true, sessionKey: "s1" }, CTX);
-    expect(calls.map((c) => c.url)).toEqual([`${SERVER}/ad/request`, `${SERVER}/ad/impression`]);
-    expect(calls[1]!.body).toEqual({ ad_id: "ad-1", user_wallet: WALLET, token: "imp-tok" });
+    expect(calls.filter((c) => c.url.includes("/ad/")).map((c) => c.url)).toEqual([
+      `${SERVER}/ad/request`,
+      `${SERVER}/ad/impression`,
+    ]);
+    const impression = calls.find((c) => c.url.endsWith("/ad/impression"));
+    expect(impression!.body).toMatchObject({ ad_id: "ad-1", user_wallet: WALLET, token: "imp-tok" });
 
     await hooks.message_sent({ to: "x", content: text, success: true, sessionKey: "s1" }, CTX);
-    expect(calls.length).toBe(2); // billed once
+    expect(calls.filter((c) => c.url.endsWith("/ad/impression"))).toHaveLength(1);
   });
 
   it("bills the chunk that carries the footer when a long reply is split", async () => {

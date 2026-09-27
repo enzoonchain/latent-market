@@ -16,7 +16,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { deviceId, loadConfig } from "./config.js";
+import { ensureDeviceCredential, loadConfig } from "./config.js";
 import { recordServerResult, shouldServe } from "./health.js";
 import { inlineIcon } from "./icon.js";
 import { MIN_VIEW_MS } from "./metrics.js";
@@ -208,6 +208,7 @@ export class Loopback {
       if (route === "ad" && req.method === "GET") {
         const category = url.searchParams.get("cat") || this.getCategory() || "general";
         const pane = (url.searchParams.get("pane") || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
+        const device = await ensureDeviceCredential(cfg.server);
         const r = await fetch(`${cfg.server}/ad/request`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -218,7 +219,7 @@ export class Loopback {
             surface: "spinner",
             tags: category ? [category] : [],
             session_id: pane ? `${this.token}:${pane}` : this.token,
-            device_id: deviceId(),
+            device_id: device,
           }),
           signal: AbortSignal.timeout(3000),
         });
@@ -268,9 +269,7 @@ export class Loopback {
               agent: this.agent,
               surface: body.surface || "spinner",
               context: this.getCategory() || "",
-              // device_id is re-sent here (the API is stateless) so the
-              // impressions row carries it for the per-device daily cap.
-              device_id: deviceId(),
+              device_id: await ensureDeviceCredential(cfg.server),
               displayed_ms: Math.round(body.displayedMs),
             }),
             signal: AbortSignal.timeout(3000),

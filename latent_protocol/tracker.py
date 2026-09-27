@@ -7,6 +7,8 @@ alone — that would bill invisible ads. See ``latent_protocol.delivery``.
 
 import httpx
 
+from .setup import ensure_device_credential
+
 
 class Tracker:
     def __init__(self, server_url: str):
@@ -28,7 +30,12 @@ class Tracker:
         statusline returned, thinking banner mounted, etc.). ``displayed_ms``
         is the on-screen dwell; the server credits only at or above its floor.
         """
-        body: dict = {"ad_id": ad_id, "user_wallet": wallet, "token": token}
+        body: dict = {
+            "ad_id": ad_id,
+            "user_wallet": wallet,
+            "token": token,
+            "device_id": ensure_device_credential(self.server),
+        }
         if displayed_ms is not None:
             body["displayed_ms"] = int(displayed_ms)
         if event_uuid:

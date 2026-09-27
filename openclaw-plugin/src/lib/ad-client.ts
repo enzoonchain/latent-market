@@ -5,7 +5,7 @@
  * hard 2s timeout — the agent must never stall or break because of ads.
  */
 
-import { deviceId } from "./config.js";
+import { ensureDeviceCredential } from "./config.js";
 
 export interface Ad {
   ad_id?: string;
@@ -47,12 +47,13 @@ async function postJson(url: string, body: unknown): Promise<Response | null> {
 
 /** Request the best matching ad. Returns `null` if none / on any error. */
 export async function fetchAd(req: AdRequest): Promise<Ad | null> {
+  const device = await ensureDeviceCredential(req.server);
   const resp = await postJson(`${req.server}/ad/request`, {
     user_wallet: req.wallet,
     agent: "openclaw",
     context: req.context.slice(0, 100) || "general",
     surface: req.surface,
-    device_id: deviceId(),
+    device_id: device,
   });
   if (!resp || !resp.ok) return null;
   try {

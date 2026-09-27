@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { deviceId, resolveServer, resolveWallet } from "./config.js";
+import { ensureDeviceCredential, resolveServer, resolveWallet } from "./config.js";
 import { recordServerResult, shouldServe } from "./killswitch.js";
 
 export interface Ad {
@@ -24,6 +24,7 @@ export async function requestAd(opts: {
   const server = (opts.server || resolveServer()).replace(/\/+$/, "");
   // Remote killswitch / local incident backoff — serve nothing, hit nothing.
   if (!shouldServe().ok) return null;
+  const device = await ensureDeviceCredential(server);
   try {
     const res = await fetch(`${server}/ad/request`, {
       method: "POST",
@@ -37,7 +38,7 @@ export async function requestAd(opts: {
         surface: opts.surface,
         tags: opts.context ? [opts.context] : [],
         ...(opts.sessionId ? { session_id: opts.sessionId } : {}),
-        device_id: deviceId(),
+        device_id: device,
       }),
       signal: AbortSignal.timeout(2000),
     });
@@ -63,6 +64,7 @@ export async function logImpression(
   const base = (server || resolveServer()).replace(/\/+$/, "");
   // If we're killed / in backoff we never showed an ad, so there's nothing to bill.
   if (!shouldServe().ok) return;
+  const device = await ensureDeviceCredential(base);
   try {
     const res = await fetch(`${base}/ad/impression`, {
       method: "POST",
@@ -71,6 +73,7 @@ export async function logImpression(
         ad_id: adId,
         user_wallet: wallet,
         token: token || "",
+        device_id: device,
         // Idempotency key — the server can dedupe retries / cache-shared
         // double-sends on it (ignored until it does).
         event_uuid: eventId,

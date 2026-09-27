@@ -14,13 +14,8 @@ export interface PluginConfig {
     server: string;
     minPayout: number;
 }
-/**
- * Stable per-install identifier, shared with every other surface (Claude
- * Code, Codex/MiMo, the VS Code extension, and the Python adapters all
- * read/write this same file). Not a secret — a correlation signal so the
- * server can cap per physical machine, not only per (free, instantly-
- * mintable) wallet. Best-effort: never throws.
- */
+/** Server-issued credential shared with the other Latent surfaces. Empty if unset. */
 export declare function deviceId(): string;
+export declare function ensureDeviceCredential(server: string): Promise<string>;
 /** Merge the SDK-provided config with env fallbacks and defaults. */
 export declare function getConfig(raw?: Partial<PluginConfig>): PluginConfig;

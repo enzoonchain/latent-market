@@ -7,15 +7,14 @@ Priority:    config file > env vars > built-in defaults
 from __future__ import annotations
 
 import json
-import os
 import re
-import secrets
 from pathlib import Path
 
 _CONFIG_DIR = Path.home() / ".latent-protocol"
 _CONFIG_FILE = _CONFIG_DIR / "config.json"
 _DEVICE_ID_FILE = _CONFIG_DIR / "device_id"
 _EVM_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+_DEVICE_CREDENTIAL_RE = re.compile(r"^[0-9a-f]{32}\.\d+\.[A-Za-z0-9_-]+$", re.I)
 
 
 # ── Config file helpers ──────────────────────────────────────────────────────
@@ -37,38 +36,46 @@ def save_config_file(data: dict) -> None:
 
 
 def device_id() -> str:
-    """Stable per-install identifier, shared with every other surface — the
-    TS surfaces (Claude Code, Codex/MiMo, OpenClaw, the VS Code extension)
-    read/write this same ``~/.latent-protocol/device_id`` file. Not a secret;
-    just a correlation signal so the server can cap per physical machine, not
-    only per (free, instantly-mintable) wallet.
+    """Server-issued device credential shared with the TS surfaces.
 
-    Best-effort: never raises. A read/write failure just means this call
-    reports no device_id — ad serving must never depend on this file.
+    Empty when the file is missing or still holds a client-minted id. Never
+    raises — ad serving must not depend on this file.
     """
     try:
         existing = _DEVICE_ID_FILE.read_text().strip()
-        if existing:
-            return existing
     except OSError:
-        pass
-    new_id = secrets.token_hex(16)
+        return ""
+    return existing if _DEVICE_CREDENTIAL_RE.match(existing) else ""
+
+
+def ensure_device_credential(server: str) -> str:
+    """Register with the ad server once and store the credential."""
+    current = device_id()
+    if current:
+        return current
+    try:
+        import httpx
+
+        resp = httpx.post(
+            f"{server.rstrip('/')}/device/register",
+            json={},
+            timeout=2.0,
+        )
+        if resp.status_code != 200:
+            return ""
+        credential = str((resp.json() or {}).get("credential") or "").strip()
+    except Exception:
+        return ""
+    if not _DEVICE_CREDENTIAL_RE.match(credential):
+        return ""
     try:
         _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        # Exclusive create: if another surface's process wins the race, this
-        # raises FileExistsError and we fall through to re-read its value.
-        fd = os.open(_DEVICE_ID_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-        with os.fdopen(fd, "w") as f:
-            f.write(new_id)
-        return new_id
+        if device_id():
+            return device_id()
+        _DEVICE_ID_FILE.write_text(credential)
     except OSError:
-        try:
-            winner = _DEVICE_ID_FILE.read_text().strip()
-            if winner:
-                return winner
-        except OSError:
-            pass  # FS unavailable — fall back to this call's in-memory id
-        return new_id
+        return credential
+    return device_id() or credential
 
 
 # ── Wallet helpers ───────────────────────────────────────────────────────────

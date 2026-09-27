@@ -2,7 +2,7 @@
 
 import httpx
 
-from .setup import device_id
+from .setup import ensure_device_credential
 
 
 class AdClient:
@@ -29,7 +29,7 @@ class AdClient:
                     "agent": agent,
                     "context": context,
                     "surface": surface,
-                    "device_id": device_id(),
+                    "device_id": ensure_device_credential(self.server),
                 },
                 timeout=2.0,
             )

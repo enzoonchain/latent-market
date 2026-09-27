@@ -10,7 +10,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
 const DEFAULT_SERVER = "https://api.latentprotocol.xyz";
 function envBool(value, fallback) {
     if (value === undefined)
@@ -51,40 +50,58 @@ function readLatentConfigFile() {
     return {};
 }
 const DEVICE_ID_FILE = join(homedir(), ".latent-protocol", "device_id");
-/**
- * Stable per-install identifier, shared with every other surface (Claude
- * Code, Codex/MiMo, the VS Code extension, and the Python adapters all
- * read/write this same file). Not a secret — a correlation signal so the
- * server can cap per physical machine, not only per (free, instantly-
- * mintable) wallet. Best-effort: never throws.
- */
+const DEVICE_CREDENTIAL_RE = /^[0-9a-f]{32}\.\d+\.[A-Za-z0-9_-]+$/i;
+/** Server-issued credential shared with the other Latent surfaces. Empty if unset. */
 export function deviceId() {
     try {
         const existing = readFileSync(DEVICE_ID_FILE, "utf8").trim();
-        if (existing)
+        if (DEVICE_CREDENTIAL_RE.test(existing))
             return existing;
     }
     catch {
-        // fall through to create
+        // missing file
     }
-    const id = randomBytes(16).toString("hex");
+    return "";
+}
+export async function ensureDeviceCredential(server) {
+    const current = deviceId();
+    if (current)
+        return current;
+    const base = server.replace(/\/+$/, "");
+    let credential = "";
     try {
-        mkdirSync(join(homedir(), ".latent-protocol"), { recursive: true });
-        // Exclusive create: if another surface's process wins the race, this
-        // throws EEXIST and we fall through to re-read its winning value below.
-        writeFileSync(DEVICE_ID_FILE, id, { flag: "wx" });
-        return id;
+        const res = await fetch(`${base}/device/register`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+            signal: AbortSignal.timeout(2000),
+        });
+        if (!res.ok)
+            return "";
+        const body = (await res.json());
+        credential = (body.credential || "").trim();
     }
     catch {
+        return "";
+    }
+    if (!DEVICE_CREDENTIAL_RE.test(credential))
+        return "";
+    try {
+        mkdirSync(join(homedir(), ".latent-protocol"), { recursive: true });
+        writeFileSync(DEVICE_ID_FILE, credential, { flag: "wx" });
+        return credential;
+    }
+    catch {
+        const winner = deviceId();
+        if (winner)
+            return winner;
         try {
-            const winner = readFileSync(DEVICE_ID_FILE, "utf8").trim();
-            if (winner)
-                return winner;
+            writeFileSync(DEVICE_ID_FILE, credential);
         }
         catch {
-            // FS unavailable — fall back to this call's in-memory id.
+            return credential;
         }
-        return id;
+        return deviceId() || credential;
     }
 }
 /** Merge the SDK-provided config with env fallbacks and defaults. */
