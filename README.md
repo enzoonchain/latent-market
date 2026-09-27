@@ -32,6 +32,7 @@ npx latent-protocol@beta init
 
 ```bash
 npx latent-protocol@beta status      # wallet, balance, patched surfaces
+npx latent-protocol@beta stats --today   # today's earnings, clicks, cap; --all for lifetime (remembered)
 npx latent-protocol@beta uninstall   # revert every patch
 ```
 

@@ -18,7 +18,7 @@ import { refreshKillswitch, shouldServe } from "./health.js";
 import { isSafeHttpUrl, sanitizeText } from "./urlsafe.js";
 import { MIN_VIEW_MS, ViewabilityTracker, type MetricEvent } from "./metrics.js";
 import { EarningsStatusBar } from "./statusbar.js";
-import { fetchEarnings } from "./earnings.js";
+import { fetchEarnings, fetchWalletStats, statCells, type StatsPeriod } from "./earnings.js";
 import { checkBundleConflict, runAllChecks } from "./conflict.js";
 import { installClaudeCliHook, removeClaudeCliHook, statuslineRuntimePath } from "./claude-cli.js";
 import { findWorkbenchHtml, isWorkbenchPatched, patchWorkbench, restoreWorkbench, syncWorkbenchChecksum, workbenchChecksumMatches, WB_BLOCK_FILE } from "./workbench.js";
@@ -82,6 +82,12 @@ function agentRows(): PanelState["agents"] {
   });
 }
 
+const STATS_PERIOD_KEY = "latent.statsPeriod";
+
+function statsPeriod(context: vscode.ExtensionContext): StatsPeriod {
+  return context.globalState.get<StatsPeriod>(STATS_PERIOD_KEY) === "today" ? "today" : "all";
+}
+
 async function collectPanelState(context: vscode.ExtensionContext): Promise<PanelState> {
   const cfg = loadConfig();
   const accepted = policiesOk(context);
@@ -94,9 +100,18 @@ async function collectPanelState(context: vscode.ExtensionContext): Promise<Pane
     clicks: "—",
     personal: false,
   };
+  let stats: PanelState["stats"] = null;
+  let tier: number | null = null;
   if (accepted && !cfg.wallet) balanceText = "Latent — set up";
   if (accepted && cfg.wallet) {
-    const e = await fetchEarnings(cfg.server, cfg.wallet);
+    const [e, ws] = await Promise.all([
+      fetchEarnings(cfg.server, cfg.wallet),
+      fetchWalletStats(cfg.server, cfg.wallet),
+    ]);
+    if (ws) {
+      stats = { today: statCells(ws, "today"), all: statCells(ws, "all") };
+      tier = ws.tier;
+    }
     if (e.kind === "ok") {
       const paidOut = Math.max(0, e.totalEarned - e.balance);
       balanceText = `$${e.balance.toFixed(2)}`;
@@ -125,6 +140,9 @@ async function collectPanelState(context: vscode.ExtensionContext): Promise<Pane
     cliInstalled: !!cli && cli.message.includes("Latent owns"),
     sponsorSurface: sponsorSurface(),
     figures,
+    stats,
+    statsPeriod: statsPeriod(context),
+    tier,
     diagnose: [
       `policy: ${accepted ? POLICY_VERSION : "not accepted"}`,
       `serve: ${health.ok ? "ok" : health.reason || "paused"}`,
@@ -488,6 +506,10 @@ async function onPanelMessage(context: vscode.ExtensionContext, msg: PanelMessag
     return;
   } else if (msg.type === "surface") {
     /* The floating line is the only sponsor surface. */
+  } else if (msg.type === "statsPeriod") {
+    // The webview already switched; remember it for the next open.
+    await context.globalState.update(STATS_PERIOD_KEY, msg.period === "today" ? "today" : "all");
+    return;
   }
   await pushPanel(context);
 }

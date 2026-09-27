@@ -141,6 +141,8 @@ export interface LatentConfig {
   privy_user_id?: string;
   /** How the wallet was bound: privy | address */
   auth?: string;
+  /** Which stats `status` / `stats` print: today (UTC day) or all time. */
+  stats_period?: "today" | "all";
 }
 
 export function loadConfig(): LatentConfig {
