@@ -3,6 +3,7 @@
  * authority on what is billable, so a dropped report just means no earnings.
  */
 import { adId } from "./ad-client.js";
+import { ensureDeviceCredential } from "./config.js";
 const TIMEOUT_MS = 2000;
 async function post(url, body) {
     const controller = new AbortController();
@@ -28,6 +29,7 @@ export async function trackImpression(ad, wallet, server) {
         ad_id: adId(ad),
         user_wallet: wallet,
         token: ad.impression_token ?? "",
+        device_id: await ensureDeviceCredential(server),
     });
 }
 export async function trackClick(ad, wallet, server) {

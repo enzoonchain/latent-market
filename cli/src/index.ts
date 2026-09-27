@@ -173,7 +173,7 @@ async function cmdInit(args: string[]): Promise<void> {
     console.log();
   }
   if (detected.hermes || detected.hermesWebui) {
-    console.log(installHermes());
+    console.log(await installHermes());
     console.log();
   }
   if (detected.openclaw) {

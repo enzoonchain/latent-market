@@ -105,7 +105,7 @@ export async function runActivate(): Promise<void> {
 
   if (detected.claudeCode) lines.push(installClaudeCode());
   if (detected.grok) lines.push(installGrok());
-  if (detected.hermes || detected.hermesWebui) lines.push(installHermes());
+  if (detected.hermes || detected.hermesWebui) lines.push(await installHermes());
   if (detected.openclaw) lines.push(installOpenclaw());
   // No longer supported (they rewrote the LLM call); strip old installs.
   if (codexLegacyInstalled()) lines.push(uninstallCodexFamily());

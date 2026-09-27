@@ -1,7 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
 
 export const DEFAULT_SERVER = "https://api.latentprotocol.xyz";
 
@@ -58,40 +57,58 @@ export function deviceIdFile(): string {
   return join(configDir(), "device_id");
 }
 
+/** `hex.issued.sig` from POST /device/register. A locally minted hex does not match. */
+export const DEVICE_CREDENTIAL_RE = /^[0-9a-f]{32}\.\d+\.[A-Za-z0-9_-]+$/i;
+
 /**
- * Stable per-install identifier, shared across every surface (Claude Code,
- * Codex/MiMo, OpenClaw, the VS Code extension, and the Python adapters all
- * read/write the same `~/.latent-protocol/device_id` file). Not a secret —
- * just a correlation signal so the server can rate-limit/cap per physical
- * machine, not only per (free, instantly-mintable) wallet.
- *
- * Best-effort: never throws. A read/write failure just means this call sends
- * no device_id — ad serving must never depend on this file existing.
+ * Server-issued device credential shared by every surface (Claude Code,
+ * OpenClaw, the VS Code extension, and the Python adapters all read this
+ * same file). Empty when the file is missing or still holds a client-minted
+ * id — those do not earn. Never throws.
  */
 export function deviceId(): string {
   try {
     const existing = readFileSync(deviceIdFile(), "utf8").trim();
-    if (existing) return existing;
+    if (DEVICE_CREDENTIAL_RE.test(existing)) return existing;
   } catch {
-    // fall through to create
+    // missing file
   }
-  const id = randomBytes(16).toString("hex");
+  return "";
+}
+
+/** Fetch a credential once and store it. A legacy hex file is replaced. */
+export async function ensureDeviceCredential(server: string): Promise<string> {
+  const current = deviceId();
+  if (current) return current;
+  const base = server.replace(/\/+$/, "");
+  let credential = "";
+  try {
+    const res = await fetch(`${base}/device/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return "";
+    const body = (await res.json()) as { credential?: string };
+    credential = (body.credential || "").trim();
+  } catch {
+    return "";
+  }
+  if (!DEVICE_CREDENTIAL_RE.test(credential)) return "";
   try {
     mkdirSync(configDir(), { recursive: true });
-    // Exclusive create: if another surface's process wins the race, this
-    // throws EEXIST and we fall through to re-read its winning value below.
-    writeFileSync(deviceIdFile(), id, { flag: "wx" });
-    return id;
+    writeFileSync(deviceIdFile(), credential, { flag: "wx" });
+    return credential;
   } catch {
+    const winner = deviceId();
+    if (winner) return winner;
     try {
-      const winner = readFileSync(deviceIdFile(), "utf8").trim();
-      if (winner) return winner;
+      writeFileSync(deviceIdFile(), credential);
     } catch {
-      // FS unavailable — fall back to this call's in-memory id rather than
-      // block ad serving. Not persisted, so a future call may mint another;
-      // acceptable, this is a soft signal, not an identity guarantee.
+      return credential;
     }
-    return id;
+    return deviceId() || credential;
   }
 }
 

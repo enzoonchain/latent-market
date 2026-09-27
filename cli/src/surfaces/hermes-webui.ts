@@ -181,7 +181,9 @@ export function renderExtensionScript(opts: {
 }): string {
   const raw = readFileSync(join(templatePath("hermes-webui-extension"), "latent-ads.js"), "utf8");
   const wallet = /^0x[0-9a-fA-F]{40}$/.test(opts.wallet) ? opts.wallet : "";
-  const device = /^[0-9a-f]{8,64}$/i.test(opts.deviceId ?? "") ? opts.deviceId! : "";
+  const device = /^(?:[0-9a-f]{8,64}|[0-9a-f]{32}\.\d+\.[A-Za-z0-9_-]+)$/i.test(opts.deviceId ?? "")
+    ? opts.deviceId!
+    : "";
   const frequency = Math.max(1, Math.floor(Number(opts.frequency) || 1));
   let js = templateOnce(raw, "__SERVER__", JSON.stringify(opts.server.replace(/\/+$/, "")));
   js = templateOnce(js, "__WALLET__", JSON.stringify(wallet));

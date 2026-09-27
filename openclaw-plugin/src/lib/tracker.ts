@@ -4,6 +4,7 @@
  */
 
 import { Ad, adId } from "./ad-client.js";
+import { ensureDeviceCredential } from "./config.js";
 
 const TIMEOUT_MS = 2000;
 
@@ -30,6 +31,7 @@ export async function trackImpression(ad: Ad, wallet: string, server: string): P
     ad_id: adId(ad),
     user_wallet: wallet,
     token: ad.impression_token ?? "",
+    device_id: await ensureDeviceCredential(server),
   });
 }
 

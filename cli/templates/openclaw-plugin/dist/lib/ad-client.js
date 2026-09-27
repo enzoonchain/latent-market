@@ -4,7 +4,7 @@
  * Mirrors the Python `AdClient` / `Tracker`. Every call is fail-open with a
  * hard 2s timeout — the agent must never stall or break because of ads.
  */
-import { deviceId } from "./config.js";
+import { ensureDeviceCredential } from "./config.js";
 const TIMEOUT_MS = 2000;
 async function postJson(url, body) {
     const controller = new AbortController();
@@ -26,12 +26,13 @@ async function postJson(url, body) {
 }
 /** Request the best matching ad. Returns `null` if none / on any error. */
 export async function fetchAd(req) {
+    const device = await ensureDeviceCredential(req.server);
     const resp = await postJson(`${req.server}/ad/request`, {
         user_wallet: req.wallet,
         agent: "openclaw",
         context: req.context.slice(0, 100) || "general",
         surface: req.surface,
-        device_id: deviceId(),
+        device_id: device,
     });
     if (!resp || !resp.ok)
         return null;
