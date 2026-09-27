@@ -3,6 +3,7 @@
  * one document. Policy, earnings, and surface choice live here.
  */
 import * as vscode from "vscode";
+import type { StatCell, StatsPeriod } from "./earnings.js";
 
 export type AgentKind = "claude-code" | "codex";
 
@@ -32,6 +33,11 @@ export interface PanelState {
     clicks: string;
     personal: boolean;
   };
+  /** Today / all-time tiles from `GET /earnings/{wallet}/stats`; null on an
+   * older server (the panel then shows `figures`). */
+  stats: Record<StatsPeriod, { cells: StatCell[]; breakdown: string }> | null;
+  statsPeriod: StatsPeriod;
+  tier: number | null;
 }
 
 export type PanelMessage =
@@ -43,7 +49,8 @@ export type PanelMessage =
   | { type: "refresh" }
   | { type: "reload" }
   | { type: "openDashboard" }
-  | { type: "surface"; surface: "statusbar" | "overlay" };
+  | { type: "surface"; surface: "statusbar" | "overlay" }
+  | { type: "statsPeriod"; period: StatsPeriod };
 
 let current: vscode.WebviewPanel | undefined;
 let sidebar: vscode.Webview | undefined;
@@ -205,6 +212,10 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   }
   .switch.on { background: var(--green); box-shadow: none; }
   .switch.on i { transform: translateX(16px); }
+  .seg.period { margin-top: 14px; }
+  .seg button { padding: 6px 10px; }
+  .breakdown { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+  .tier { margin-left: 6px; vertical-align: middle; }
   .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.7); }
   .seg button { background: transparent; color: var(--ink-2); border-radius: 10px; }
   .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 6px 18px -10px rgba(28,64,130,.4); }
@@ -255,7 +266,12 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
       </div>
       <button class="switch" id="enabled" type="button" role="switch" aria-checked="false" aria-label="Earning"><i></i></button>
     </div>
+    <div class="seg period" id="period" role="tablist" aria-label="Stats period" style="display:none">
+      <button type="button" role="tab" data-period="today">Today</button>
+      <button type="button" role="tab" data-period="all">All time</button>
+    </div>
     <div class="stats" id="stats"></div>
+    <p class="breakdown" id="breakdown"></p>
     <p class="meta" style="margin:10px 0 0">Sign-in, payouts, and campaigns are on the dashboard (Privy).</p>
     <div class="actions">
       <button class="ghost" id="dashboard" type="button">Manage wallet</button>
@@ -301,15 +317,11 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     $("balanceLabel").textContent = "Your balance";
     $("balance").textContent = f.personal ? (f.balance || "—") : "—";
     $("wallet").textContent = s.wallet || "No wallet yet — npx latent-protocol init";
-    const cells = [
-      ["Total impressions", f.impressions],
-      ["Total paid out", f.paidOut],
-      ["Total earned", f.totalEarned],
-      ["Clicks", f.clicks],
-    ];
+    last = s;
+    if (!periodTouched) period = s.statsPeriod || "all";
+    renderStats();
     const dash = $("dashboard");
     if (dash) dash.className = s.wallet ? "ghost" : "primary";
-    $("stats").innerHTML = cells.map(([k, v]) => '<div class="stat"><b>' + esc(v || "—") + '</b><span>' + esc(k) + '</span></div>').join("");
     const on = !!s.enabled;
     $("enabled").classList.toggle("on", on);
     $("enabled").setAttribute("aria-checked", on ? "true" : "false");
@@ -325,6 +337,38 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     $("diagnose").textContent = s.diagnose || "";
     document.querySelectorAll(".busy").forEach((n) => n.classList.remove("busy"));
   }
+  let last = null;
+  let period = "all";
+  let periodTouched = false;
+  function renderStats() {
+    const s = last;
+    if (!s) return;
+    const f = s.figures || {};
+    const view = s.stats ? s.stats[period] : null;
+    const cells = view
+      ? view.cells.map((c) => [c.label, c.value])
+      : [
+          ["Total impressions", f.impressions],
+          ["Total paid out", f.paidOut],
+          ["Total earned", f.totalEarned],
+          ["Clicks", f.clicks],
+        ];
+    $("period").style.display = s.stats ? "grid" : "none";
+    document.querySelectorAll("#period button").forEach((b) => {
+      const on = b.getAttribute("data-period") === period;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    $("stats").innerHTML = cells.map(([k, v]) => '<div class="stat"><b>' + esc(v || "—") + '</b><span>' + esc(k) + '</span></div>').join("");
+    $("breakdown").textContent = view ? view.breakdown : "";
+    $("balanceLabel").innerHTML = "Your balance" + (s.tier ? ' <span class="pill tier">Tier ' + esc(s.tier) + "</span>" : "");
+  }
+  document.querySelectorAll("#period button").forEach((b) => b.addEventListener("click", () => {
+    period = b.getAttribute("data-period") === "today" ? "today" : "all";
+    periodTouched = true;
+    renderStats();
+    vscode.postMessage({ type: "statsPeriod", period });
+  }));
   function syncAccept() { $("accept").disabled = !($("terms").checked && $("share").checked); }
   $("terms").addEventListener("change", syncAccept);
   $("share").addEventListener("change", syncAccept);

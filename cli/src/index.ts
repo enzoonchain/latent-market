@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { formatHolding, getHoldingStatus } from "./holding.js";
+import { formatStats, getWalletStats, parsePeriod, type StatsPeriod } from "./stats.js";
 import {
   canonicalizeServer,
   configFile,
@@ -47,6 +48,7 @@ function printHelp(): void {
 Usage:
   npx latent-protocol init [--yes] [--wallet 0x…] [--email you@domain] [--no-browser] [--server URL]
   npx latent-protocol status
+  npx latent-protocol stats [--today|--all]
   npx latent-protocol uninstall
   npx latent-protocol statusline [--install|--uninstall]
   npx latent-protocol hook <event> --agent claude-code
@@ -58,7 +60,8 @@ Commands:
   init         Detect agents, bind a Privy/existing wallet, patch every found surface
   prelaunch    Pre-launch signup: wallet + local scan + register (ads OFF)
   activate     Enable ads and patch surfaces (after public launch)
-  status       Show config, balance, and patched surfaces
+  status       Show config, balance, stats, and patched surfaces
+  stats        Your earnings stats; --today / --all switches (and remembers) the period
   uninstall    Revert Claude Code + Grok + Hermes + OpenClaw + VS Code patches (+ old Codex / MiMo installs)
   statusline   Claude Code / Grok status-line renderer (stdin → stdout)
   hook         Turn-lifecycle hook runtime (invoked by installed hooks)
@@ -226,11 +229,18 @@ async function cmdStatus(): Promise<void> {
   }
   const health = healthSummary();
   if (health) console.log(`  Health:  ${health}`);
+  let statsBlock: string[] = [];
   if (wallet) {
-    const bal = await getBalance(wallet, server);
+    const stats = await getWalletStats(wallet, server);
+    const bal = stats ? stats.all.balance : await getBalance(wallet, server);
     console.log(`  Balance: $${bal.toFixed(4)} USDC`);
-    const holding = await getHoldingStatus(wallet, server);
+    const holding = stats?.account ?? (await getHoldingStatus(wallet, server));
     if (holding) for (const line of formatHolding(holding)) console.log(line);
+    if (stats) statsBlock = formatStats(stats, statsPeriod(cfg.stats_period));
+  }
+  if (statsBlock.length) {
+    console.log();
+    for (const line of statsBlock) console.log(line);
   }
   console.log();
   console.log("Surfaces:");
@@ -246,6 +256,41 @@ async function cmdStatus(): Promise<void> {
   console.log(formatDetectionTable(detected));
   console.log();
   console.log(formatSurfaceMatrix(detected));
+}
+
+function statsPeriod(saved: unknown): StatsPeriod {
+  return parsePeriod(saved) ?? "all";
+}
+
+async function cmdStats(args: string[]): Promise<void> {
+  let cfg = loadConfig();
+  let chosen: StatsPeriod | null = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--today" || a === "--day" || a === "--daily") chosen = "today";
+    else if (a === "--all" || a === "--total") chosen = "all";
+    else if (a === "--period" && args[i + 1]) chosen = parsePeriod(args[++i]);
+    else if (a.startsWith("--period=")) chosen = parsePeriod(a.slice("--period=".length));
+  }
+  // The switch sticks: `status` prints the same period next time.
+  if (chosen && chosen !== cfg.stats_period) cfg = saveConfig({ stats_period: chosen });
+  const wallet = resolveWallet(cfg);
+  if (!wallet) {
+    console.log("No wallet set — run `npx latent-protocol init` first.");
+    process.exitCode = 1;
+    return;
+  }
+  const stats = await getWalletStats(wallet, resolveServer(cfg));
+  if (!stats) {
+    console.log("Stats are not available from this server yet.");
+    process.exitCode = 1;
+    return;
+  }
+  for (const line of formatStats(stats, chosen ?? statsPeriod(cfg.stats_period))) console.log(line);
+  if (stats.account) {
+    console.log();
+    for (const line of formatHolding(stats.account)) console.log(line);
+  }
 }
 
 async function cmdUninstall(): Promise<void> {
@@ -337,6 +382,9 @@ async function main(): Promise<void> {
       break;
     case "status":
       await cmdStatus();
+      break;
+    case "stats":
+      await cmdStats(args);
       break;
     case "uninstall":
       await cmdUninstall();
