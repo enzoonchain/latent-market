@@ -95,6 +95,8 @@ const routes = {
 
   "GET /spotlight": (_body, _url, res) => send(res, 200, { day: 0, entries: [] }),
 
+  "GET /spotlight/clicks": (_body, _url, res) => send(res, 200, { clicks: {} }),
+
   "GET /blocks/market": (_body, _url, res) =>
     send(res, 200, {
       day: 0,
