@@ -208,7 +208,8 @@ def test_statusline_plain_shape_appends_a_short_url(monkeypatch):
     line = cc.format_statusline(FAKE_AD)
     assert "ad· " in line
     assert "\033]8;;" not in line
-    assert "https://acme.io" in line
+    assert "  acme.io" in line
+    assert "https://" not in line
 
 
 def test_statusline_osc8_shape_hides_a_long_bare_url(monkeypatch):

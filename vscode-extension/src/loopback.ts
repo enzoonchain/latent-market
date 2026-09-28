@@ -18,7 +18,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { ensureDeviceCredential, loadConfig } from "./config.js";
 import { recordServerResult, shouldServe } from "./health.js";
-import { inlineIcon } from "./icon.js";
+import { composeAdLine } from "./adline.js";
+import { inlineIcon, uploadHref } from "./icon.js";
 import { MIN_VIEW_MS } from "./metrics.js";
 
 export interface LoopbackIdentity {
@@ -234,14 +235,21 @@ export class Loopback {
           store[adId] = { clickToken, ctaUrl };
           saveAdStore(this.agent, store);
         }
+        const title = typeof ad.title === "string" ? ad.title : "";
+        const body = typeof ad.body === "string" ? ad.body : "";
+        const imageRaw = typeof ad.image_url === "string" ? ad.image_url : "";
+        const logoUrl = uploadHref(imageRaw, cfg.server);
         return send(res, 200, {
           ad: {
-            text: (ad.body as string) || (ad.title as string) || "",
+            title,
+            body,
+            text: composeAdLine(title, body),
             url: ctaUrl,
             adId,
             token: (ad.impression_token as string) || "",
             clickHref: adId ? `${this.baseUrl}/click?adId=${encodeURIComponent(adId)}` : "",
-            iconUrl: typeof ad.image_url === "string" ? await inlineIcon(ad.image_url, cfg.server) : "",
+            iconUrl: logoUrl ? await inlineIcon(logoUrl, cfg.server) : "",
+            logoUrl,
             earnAmount: Number.isFinite(Number(ad.earn_amount)) ? Number(ad.earn_amount) : 0,
           },
         });

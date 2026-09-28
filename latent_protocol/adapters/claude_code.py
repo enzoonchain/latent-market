@@ -33,6 +33,7 @@ import uuid
 from pathlib import Path
 
 from ..ad_client import AdClient
+from ..adline import compose_ad_line, display_url
 from ..config import Config
 from ..sanitize import AD_LIMITS, is_safe_https_url, sanitize_ad_text
 from ..tracker import Tracker
@@ -116,11 +117,14 @@ def format_statusline(ad: dict) -> str:
     ANSI is built around them (raw ESC/CSI/OSC or bidi-override bytes here
     would act on the terminal itself, not just render as text).
     """
-    body = sanitize_ad_text(ad.get("body") or ad.get("title"), AD_LIMITS["body"]) or "Sponsored"
+    copy = compose_ad_line(ad.get("title"), ad.get("body")) or sanitize_ad_text(
+        ad.get("body") or ad.get("title"), AD_LIMITS["body"]
+    ) or "Sponsored"
     cta_url = ad.get("cta_url", "") if isinstance(ad.get("cta_url"), str) else ""
     earn = ad.get("earn_amount", 0)
-    label = f"ad· {body}"
-    bare = f"  {cta_url}" if _is_safe_url(cta_url) and len(cta_url) <= _MAX_BARE_URL else ""
+    label = f"ad· {copy}"
+    shown = display_url(cta_url)
+    bare = f"  {shown}" if _is_safe_url(cta_url) and shown and len(shown) <= _MAX_BARE_URL else ""
     shape = _link_shape()
     if not _is_safe_url(cta_url):
         linked = label

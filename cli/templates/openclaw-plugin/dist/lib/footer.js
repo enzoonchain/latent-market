@@ -50,6 +50,39 @@ const PLAIN_CHANNELS = new Set(["whatsapp", "signal", "sms", "imessage", "bluebu
 export function footerStyle(channel) {
     return PLAIN_CHANNELS.has((channel ?? "").toLowerCase()) ? "plain" : "markdown";
 }
+const WORD = /[\p{L}\p{N}]/u;
+const LEAD_SEP = /^[\s\-:–—]+/;
+function clampField(value, max) {
+    const t = value.trim();
+    return t.length <= max ? t : `${t.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+function composeAdLine(title, body) {
+    const brandRaw = sanitizeAdText(title, 0);
+    let line = sanitizeAdText(body, 0);
+    const b = brandRaw.trim();
+    if (b) {
+        const lb = b.toLowerCase();
+        while (line.toLowerCase().startsWith(lb)) {
+            const after = line.charAt(b.length);
+            if (after !== "" && WORD.test(after))
+                break;
+            const rest = line.slice(b.length).replace(LEAD_SEP, "");
+            if (rest === line)
+                break;
+            line = rest;
+            if (line === "")
+                break;
+        }
+    }
+    const brand = clampField(brandRaw, 30);
+    const text = clampField(line, 60);
+    if (brand && text)
+        return `${brand} — ${text}`;
+    return brand || text;
+}
+function displayUrl(url) {
+    return url.startsWith("https://") ? url.slice("https://".length) : "";
+}
 /** Labelled sponsored footer appended to the final outgoing reply. */
 export function formatFooter(ad, href, style = "markdown") {
     const body = sanitizeAdText(ad.body || ad.title, AD_LIMITS.body) || "Sponsored";
@@ -58,8 +91,10 @@ export function formatFooter(ad, href, style = "markdown") {
     const safe = isSafeUrl(href);
     // One quiet line: the ad reads first, the disclosure is a trailing tag.
     if (style === "plain") {
-        const link = safe ? `${cta} → ${href}` : `${cta} →`;
-        return `\n\n${body}  ${link} · Sponsored: +$${earn} USDC`;
+        const copy = composeAdLine(ad.title, ad.body) || body;
+        const shown = safe ? displayUrl(href) : "";
+        const link = shown ? `${cta} → ${shown}` : `${cta} →`;
+        return `\n\n${copy}  ${link} · Sponsored: +$${earn} USDC`;
     }
     // Render a clickable markdown link only for safe https; else plain text.
     const link = safe ? `[${cta} →](${href})` : `${cta} →`;

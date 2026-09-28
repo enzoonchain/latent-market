@@ -3,6 +3,21 @@
 const MAX_INLINE_ICON_BYTES = 150_000;
 const INLINE_ICON_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
+/** Same-origin `/uploads/` URL, or "". Relative paths resolve against the ad server. */
+export function uploadHref(url: string, serverUrl: string): string {
+  try {
+    const server = new URL(serverUrl);
+    if (server.protocol !== "https:") return "";
+    const target = new URL(url, `${server.origin}/`);
+    if (target.protocol !== "https:" || target.origin !== server.origin) return "";
+    if (!target.pathname.startsWith("/uploads/")) return "";
+    if (target.username || target.password) return "";
+    return target.href;
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Fetch the advertiser icon and inline it as a data: URI. The agent webviews'
  * CSP only allows `img-src data:`, so a raw https URL would never load there.
@@ -15,9 +30,9 @@ const INLINE_ICON_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "ima
  */
 export async function inlineIcon(url: string, serverUrl: string): Promise<string> {
   try {
-    const target = new URL(url);
-    if (target.protocol !== "https:" || target.origin !== new URL(serverUrl).origin) return "";
-    if (!target.pathname.startsWith("/uploads/")) return "";
+    const href = uploadHref(url, serverUrl);
+    if (!href) return "";
+    const target = new URL(href);
     const r = await fetch(target, { signal: AbortSignal.timeout(2000), redirect: "error" });
     if (!r.ok) return "";
     const contentType = (r.headers.get("content-type") || "").split(";")[0].trim();

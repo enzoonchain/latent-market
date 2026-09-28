@@ -28,7 +28,8 @@ def test_telegram_footer_format():
 
 def test_cli_footer_has_ansi():
     out = format_footer(AD, style="cli")
-    assert AD["cta_url"] in out and "Sponsored: +$0.005 USDC" in out
+    assert "x.io" in out and "https://" not in out
+    assert "Sponsored: +$0.005 USDC" in out
     assert "\033[2m" in out and "\033[33m" not in out  # dim tag, no loud colour
 
 

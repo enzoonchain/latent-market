@@ -16,7 +16,7 @@
  */
 
 /** Baked into the workbench script. A running window that still reports an older id needs a reload. */
-export const CURSOR_BUILD = "0.5.6";
+export const CURSOR_BUILD = "0.5.19";
 
 export function buildCursorBlock(
   baseUrl: string,
@@ -54,6 +54,43 @@ export function buildCursorBlock(
 
   function clean(v) {
     return String(v == null ? "" : v).replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g, "").slice(0, 200);
+  }
+
+  function clampField(s, max) {
+    var t = String(s || "").replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g, "").trim();
+    if (t.length <= max) return t;
+    return t.slice(0, Math.max(1, max - 1)).trimEnd() + "\\u2026";
+  }
+  function dedupeBrand(brand, body) {
+    var b = String(brand || "").trim();
+    var t = String(body || "").trim();
+    if (!b) return t;
+    var lb = b.toLowerCase();
+    var word = /[\\p{L}\\p{N}]/u;
+    while (t.toLowerCase().indexOf(lb) === 0) {
+      var after = t.charAt(b.length);
+      if (after && word.test(after)) break;
+      var rest = t.slice(b.length).replace(/^[\\s\\-:\\u2013\\u2014]+/, "");
+      if (rest === t) break;
+      t = rest;
+      if (!t) break;
+    }
+    return t;
+  }
+  function adLine(ad) {
+    if (!ad) return "";
+    var brand = clampField(ad.title, 30);
+    var body = clampField(dedupeBrand(ad.title, ad.body), 60);
+    if (brand && body) return brand + " \\u2014 " + body;
+    return brand || body || clean(ad.text);
+  }
+  function isUploadHttps(v) {
+    var s = String(v || "");
+    if (s.indexOf("https://") !== 0) return false;
+    try {
+      var u = new URL(s);
+      return u.protocol === "https:" && u.username === "" && u.pathname.indexOf("/uploads/") === 0;
+    } catch (e) { return false; }
   }
 
   function isBusy() {
@@ -355,9 +392,17 @@ export function buildCursorBlock(
     var mark = container.querySelector("[data-latent-mark]");
     var text = container.querySelector("[data-latent-text]");
     var icon = isDataImage(cur.iconUrl) ? cur.iconUrl : "";
-    if (icon && img) { img.src = icon; img.style.display = "block"; if (mark) mark.style.display = "none"; }
-    else if (img && mark) { img.style.display = "none"; mark.style.display = "inline-flex"; }
-    if (text) { text.textContent = clean(cur.text).slice(0, 72); text.removeAttribute("title"); }
+    if (!icon && isUploadHttps(cur.logoUrl)) icon = cur.logoUrl;
+    if (icon && img) {
+      img.onerror = function() {
+        img.style.display = "none";
+        if (mark) mark.style.display = "inline-flex";
+      };
+      img.src = icon;
+      img.style.display = "block";
+      if (mark) mark.style.display = "none";
+    } else if (img && mark) { img.style.display = "none"; mark.style.display = "inline-flex"; }
+    if (text) { text.textContent = adLine(cur); text.removeAttribute("title"); }
     container.removeAttribute("title");
     var tag = container.querySelector("[data-latent-tag]");
     if (tag) { tag.textContent = "Sponsored"; tag.style.color = ""; tag.style.opacity = ".6"; tag.style.fontWeight = ""; }

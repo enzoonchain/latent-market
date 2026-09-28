@@ -62,7 +62,8 @@ describe("footerStyle / plain footer", () => {
     expect(out).toContain("Swap fast");
     expect(out).toMatch(/ · Sponsored: \+\$[^ ]+ USDC$/);
     expect(out).not.toContain("💰");
-    expect(out).toContain("Trade → https://acme.example");
+    expect(out).toContain("Trade → acme.example");
+    expect(out).not.toContain("https://");
     expect(out).not.toMatch(/\*\*|\]\(|^---$/m);
   });
 });
