@@ -2,9 +2,16 @@ name: Publish CLI to npm
 
 # Publishes `cli/` (package `latent-protocol`) to the npm registry.
 #
-# Trigger: a GitHub Release whose tag is `cli-v<semver>` (e.g. cli-v0.1.4
-# or cli-v0.1.4-beta.1), or a manual run. The tag version must match
-# cli/package.json's version or the job fails before publishing.
+# Trigger: merging a version bump. A push to main that changes
+# cli/package.json publishes that version if it is not on npm yet, then
+# creates the matching `cli-v<version>` GitHub Release on the merge commit —
+# so a fix PR that carries its own bump releases itself, no manual step.
+# (That release is made with GITHUB_TOKEN, so it does not re-trigger this
+# workflow.)
+#
+# Also: a GitHub Release whose tag is `cli-v<semver>` created by hand (e.g.
+# cli-v0.1.4 or cli-v0.1.4-beta.1), or a manual run. The tag version must
+# match cli/package.json's version or the job fails before publishing.
 #
 # Prerelease versions (semver with a `-`, e.g. 0.1.4-beta.1) publish to the
 # `beta` dist-tag. A first public beta also points `latest` at that version
@@ -15,6 +22,9 @@ name: Publish CLI to npm
 # Provenance is attested via OIDC (id-token: write).
 
 on:
+  push:
+    branches: [main]
+    paths: [cli/package.json]
   release:
     types: [published]
   workflow_dispatch:
@@ -29,12 +39,42 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write # gh release create (push trigger)
   id-token: write # npm provenance + trusted publishing
 
+concurrency:
+  group: publish-cli
+  cancel-in-progress: false
+
 jobs:
+  # On push: is cli/package.json's version new? A package.json edit that
+  # keeps the version (deps, scripts) must not publish anything.
+  detect:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          VER=$(node -p "require('./cli/package.json').version")
+          NAME=$(node -p "require('./cli/package.json').name")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER is already on npm — nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$NAME@$VER is new — releasing"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   publish:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'cli-v')
+    needs: detect
+    if: >-
+      !cancelled() &&
+      (github.event_name == 'workflow_dispatch' ||
+       startsWith(github.event.release.tag_name, 'cli-v') ||
+       (github.event_name == 'push' && needs.detect.outputs.release == 'true'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -97,7 +137,7 @@ jobs:
         run: npm publish --dry-run --provenance --access public --tag ${{ steps.dist.outputs.tag }}
 
       - name: Publish
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
         working-directory: cli
         run: npm publish --provenance --access public --tag ${{ steps.dist.outputs.tag }}
         env:
@@ -106,8 +146,26 @@ jobs:
       - name: Also point latest at this beta
         if: >-
           steps.dist.outputs.tag == 'beta' &&
-          (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)) &&
-          (github.event_name == 'release' || inputs.also_tag_latest)
+          (github.event_name != 'workflow_dispatch' || (!inputs.dry_run && inputs.also_tag_latest))
         run: npm dist-tag add ${{ steps.dist.outputs.name }}@${{ steps.dist.outputs.version }} latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create the GitHub Release for this version
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.dist.outputs.version }}
+          DIST_TAG: ${{ steps.dist.outputs.tag }}
+        run: |
+          TAG="cli-v$VER"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists"
+            exit 0
+          fi
+          # Title after the merged PR, like the hand-made releases.
+          PR_TITLE=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[0].title // empty' || true)
+          TITLE="cli v$VER${PR_TITLE:+ — $PR_TITLE}"
+          FLAGS=()
+          if [ "$DIST_TAG" = beta ]; then FLAGS+=(--prerelease); fi
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TITLE" --generate-notes "${FLAGS[@]}"
