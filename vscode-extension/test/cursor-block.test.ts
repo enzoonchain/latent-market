@@ -33,6 +33,12 @@ describe("buildCursorBlock", () => {
     expect(block).toContain("view_threshold_met");
   });
 
+  it("composes brand and body and falls back to a same-origin upload logo", () => {
+    expect(block).toContain("function adLine");
+    expect(block).toContain("function isUploadHttps");
+    expect(block).not.toContain("slice(0, 72)");
+  });
+
   it("renders an icon, an Open button, and a Copy button", () => {
     expect(block).toContain("data-latent-icon");
     expect(block).toContain("data-latent-open");

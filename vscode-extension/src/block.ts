@@ -10,7 +10,7 @@
  */
 export const MARK_START = "/* LATENT-START */";
 export const MARK_END = "/* LATENT-END */";
-export const BLOCK_BUILD = "0.5.8";
+export const BLOCK_BUILD = "0.5.19";
 
 export function buildBlock(baseUrl: string, rotateSeconds: number, category: string): string {
   const cfg = JSON.stringify({ base: baseUrl, rotate: rotateSeconds * 1000, cat: category });
@@ -69,6 +69,34 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
     function visible(){ return document.visibilityState === 'visible'; }
     function onScreen(){ return busy() && visible(); }
     function clean(v){ return String(v == null ? '' : v).replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g,'').slice(0,200); }
+    function clampField(s, max){
+      var t = String(s || '').replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g,'').trim();
+      if (t.length <= max) return t;
+      return t.slice(0, Math.max(1, max - 1)).trimEnd() + '\\u2026';
+    }
+    function dedupeBrand(brand, body){
+      var b = String(brand || '').trim();
+      var t = String(body || '').trim();
+      if (!b) return t;
+      var lb = b.toLowerCase();
+      var word = /[\\p{L}\\p{N}]/u;
+      while (t.toLowerCase().indexOf(lb) === 0) {
+        var after = t.charAt(b.length);
+        if (after && word.test(after)) break;
+        var rest = t.slice(b.length).replace(/^[\\s\\-:\\u2013\\u2014]+/, '');
+        if (rest === t) break;
+        t = rest;
+        if (!t) break;
+      }
+      return t;
+    }
+    function adLine(ad){
+      if (!ad) return '';
+      var brand = clampField(ad.title, 30);
+      var body = clampField(dedupeBrand(ad.title, ad.body), 60);
+      if (brand && body) return brand + ' \\u2014 ' + body;
+      return brand || body || clean(ad.text);
+    }
     function isHttps(v){ return String(v || '').toLowerCase().indexOf('https://') === 0; }
     function isLoopback(v){ return /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\//.test(String(v || '')); }
     // The loopback inlines the advertiser icon as a data: URI (the webview's
@@ -184,7 +212,7 @@ export function buildBlock(baseUrl: string, rotateSeconds: number, category: str
       var imgEl = row.querySelector('[data-latent-favicon]');
       var url = isHttps(cur.url) ? clean(cur.url) : '';
       var href = isLoopback(cur.clickHref) ? clean(cur.clickHref) : '';
-      labelEl.textContent = clean(cur.text);
+      labelEl.textContent = adLine(cur);
       labelEl.removeAttribute('title');
       openEl.removeAttribute('title');
       if(href){ labelEl.setAttribute('href', href); openEl.setAttribute('href', href); }

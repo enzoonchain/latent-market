@@ -1,5 +1,6 @@
 """Shared, pure ad-rendering + frequency helpers used by every adapter."""
 
+from .adline import compose_ad_line, display_url
 from .sanitize import AD_LIMITS, is_safe_https_url, sanitize_ad_text
 
 
@@ -26,8 +27,10 @@ def format_footer(ad: dict, style: str = "markdown") -> str:
         cta = f"[{cta_text}]({safe_url})" if safe_url else cta_text
         return f"\n\n{body} {cta} · _Sponsored: +${earn} USDC_"
     if style == "cli":
-        cta = f"{cta_text} → {safe_url}" if safe_url else f"{cta_text} →"
-        return f"\n\n{body}  {cta} \033[2m· Sponsored: +${earn} USDC\033[0m"
+        copy = compose_ad_line(ad.get("title"), ad.get("body")) or body
+        shown = display_url(safe_url) if safe_url else ""
+        cta = f"{cta_text} → {shown}" if shown else f"{cta_text} →"
+        return f"\n\n{copy}  {cta} \033[2m· Sponsored: +${earn} USDC\033[0m"
     cta = f"[{cta_text} →]({safe_url})" if safe_url else f"{cta_text} →"
     return f"\n\n> {body} {cta} · _Sponsored: +${earn} USDC_"
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { inlineIcon } from "../src/icon.js";
+import { inlineIcon, uploadHref } from "../src/icon.js";
 
 const SERVER = "https://api.example.xyz";
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -28,6 +28,13 @@ describe("inlineIcon", () => {
     const f = stubFetch(PNG);
     await expect(inlineIcon(url, SERVER)).resolves.toBe("");
     expect(f).not.toHaveBeenCalled();
+  });
+
+  it("resolves a relative /uploads/ path against the ad server", async () => {
+    const f = stubFetch(PNG);
+    await expect(inlineIcon("/uploads/abc", SERVER)).resolves.toBe(`data:image/png;base64,${PNG.toString("base64")}`);
+    expect(String(f.mock.calls[0]![0])).toBe(`${SERVER}/uploads/abc`);
+    expect(uploadHref("/uploads/abc", SERVER)).toBe(`${SERVER}/uploads/abc`);
   });
 
   it("drops non-raster content and oversized images", async () => {

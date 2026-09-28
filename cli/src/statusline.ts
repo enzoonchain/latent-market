@@ -17,6 +17,7 @@ function billedAgent(): string {
 import { randomUUID } from "node:crypto";
 import { logImpression, requestAd, type Ad } from "./api.js";
 import { classifyPrompt } from "./classify.js";
+import { composeAdLine, displayUrl } from "./adline.js";
 import { AD_LIMITS, sanitizeAdText } from "./sanitize.js";
 
 // 10s rotation = CodeBacks parity (ADS_STATUSLINE_ROTATE still overrides).
@@ -114,11 +115,15 @@ function linkShape(): "osc8" | "plain" | "hybrid" {
 export function formatStatusline(ad: Ad): string {
   // Advertiser-controlled — strip escape sequences / control chars before this
   // reaches the terminal. isSafeUrl() already guards the OSC 8 link target.
-  const body = sanitizeAdText(ad.body || ad.title || "", AD_LIMITS.body) || "Sponsored";
+  const copy =
+    composeAdLine(ad.title, ad.body) ||
+    sanitizeAdText(ad.body || ad.title || "", AD_LIMITS.body) ||
+    "Sponsored";
   const ctaUrl = ad.cta_url || "";
   const earn = ad.earn_amount ?? 0;
-  const label = `ad· ${body}`;
-  const bare = isSafeUrl(ctaUrl) && ctaUrl.length <= MAX_BARE_URL ? `  ${ctaUrl}` : "";
+  const label = `ad· ${copy}`;
+  const shown = displayUrl(ctaUrl);
+  const bare = isSafeUrl(ctaUrl) && shown && shown.length <= MAX_BARE_URL ? `  ${shown}` : "";
   const shape = linkShape();
   const linked = !isSafeUrl(ctaUrl)
     ? label
