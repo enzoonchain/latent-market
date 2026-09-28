@@ -297,6 +297,27 @@ paths:
                         delivered_impressions: { type: integer }
                         delivered_spend: { type: number }
 
+  /spotlight/clicks:
+    get:
+      summary: Clicks the landing's Spotlight cards sent to each campaign's site
+      description: >
+        Read from DataFast (the landing's `spotlight_click` goal, grouped by its
+        `campaign_id` property) and cached for a few minutes. Empty when the
+        server has no DataFast key or DataFast is unreachable.
+      operationId: getSpotlightClicks
+      responses:
+        "200":
+          description: Click counts keyed by campaign id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clicks:
+                    type: object
+                    additionalProperties: { type: integer, minimum: 0 }
+                    example: { "3f2a…": 42 }
+
   /blocks/market:
     get:
       summary: Today's block supply per surface (ambient = CLI, premium = IDE)
