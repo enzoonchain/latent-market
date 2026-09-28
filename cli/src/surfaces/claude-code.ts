@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { AGENT_CLAUDE_CODE, binDir, saveConfig } from "../config.js";
 import { distPath } from "../pkg.js";
@@ -10,6 +10,7 @@ import {
   readSettings,
   restoreFromBackup,
   setPath,
+  writeSettingsFile,
 } from "./json-settings.js";
 import {
   SPINNER_TAGLINE,
@@ -211,7 +212,7 @@ export function installClaudeCode(opts: InstallOptions = {}): string {
   }
   saveConfig({ spinner_verbs: userOwnsSpinner ? false : spinnerVerbs });
 
-  writeFileSync(settingsPath, raw, "utf8");
+  writeSettingsFile(settingsPath, raw);
   return (
     `✅ Claude Code statusLine + turn hooks → ${settingsPath}\n` +
     `   runtime: ${staged}/ (statusline.mjs, hook.mjs)\n` +
@@ -277,7 +278,7 @@ export function uninstallClaudeCode(): string {
   }
 
   if (!changed) return "ℹ️  No Latent Protocol statusLine/hooks found; nothing to remove.";
-  writeFileSync(settingsPath, next, "utf8");
+  writeSettingsFile(settingsPath, next);
   cleanRuntimeDir();
   return `✅ Removed Latent statusLine + turn hooks from ${settingsPath}`;
 }

@@ -12,12 +12,18 @@
  * cannot parse, and restore the pristine `.latent-protocol.bak` when one
  * exists.
  */
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { binDir } from "../config.js";
-import { hasBackup, readSettings, restoreFromBackup, setPath } from "./json-settings.js";
+import {
+  hasBackup,
+  readSettings,
+  restoreFromBackup,
+  setPath,
+  writeSettingsFile,
+} from "./json-settings.js";
 
 /** Codex hook events older releases wrote into. */
 const HOST_EVENTS = ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"];
@@ -110,7 +116,7 @@ export function uninstallCodexAgent(a: CodexAgentDef): string {
   if (remaining === 0 && "hooks" in (data ?? {})) next = setPath(next, ["hooks"], undefined);
 
   if (!changed) return `ℹ️  ${a.name}: no Latent hooks found.`;
-  writeFileSync(path, next, "utf8");
+  writeSettingsFile(path, next);
   cleanStagedHookIfUnused();
   return `✅ ${a.name}: removed Latent turn hooks from ${path}`;
 }

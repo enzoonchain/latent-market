@@ -11,10 +11,10 @@
  * Every verb we write is prefixed with MARKER so we can recognise our own
  * entry and never clobber a `spinnerVerbs` the user set themselves.
  */
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseable, readSettings, setPath } from "./json-settings.js";
+import { parseable, readSettings, setPath, writeSettingsFile } from "./json-settings.js";
 import { sanitizeAdText } from "../sanitize.js";
 
 const MARKER = "✦";
@@ -57,15 +57,21 @@ function writable(path: string): { raw: string } | null {
 }
 
 /** Set `spinnerVerbs` to a single replacement verb. Returns true if the file
- *  was written. No-op (false) when missing, unparseable, user-owned, or
- *  already equal. Never throws. */
+ *  was written. No-op (false) when missing, unparseable, user-owned, already
+ *  equal, or changed by someone else since we read it. Never throws.
+ *
+ *  This runs on every turn while Claude Code itself may be saving the same
+ *  file, so the write is atomic and we re-check the file right before it:
+ *  if Claude Code saved in between, we skip this turn rather than write our
+ *  edit on top of a stale copy and undo theirs. The next turn retries. */
 export function writeSpinnerVerb(verb: string, path = claudeSettingsPath()): boolean {
   try {
     const w = writable(path);
     if (!w) return false;
     const next = setPath(w.raw, ["spinnerVerbs"], { mode: "replace", verbs: [verb] });
     if (next === w.raw || !parseable(next)) return false;
-    writeFileSync(path, next, "utf8");
+    if (readFileSync(path, "utf8") !== w.raw) return false;
+    writeSettingsFile(path, next);
     return true;
   } catch {
     return false;
@@ -81,7 +87,7 @@ export function removeSpinnerVerb(path = claudeSettingsPath()): boolean {
     const s = readSettings(path);
     if (!s.data || !("spinnerVerbs" in s.data)) return false;
     const next = setPath(w.raw, ["spinnerVerbs"], undefined);
-    writeFileSync(path, next, "utf8");
+    writeSettingsFile(path, next);
     return true;
   } catch {
     return false;
