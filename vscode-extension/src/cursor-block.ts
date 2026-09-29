@@ -16,7 +16,7 @@
  */
 
 /** Baked into the workbench script. A running window that still reports an older id needs a reload. */
-export const CURSOR_BUILD = "0.5.19";
+export const CURSOR_BUILD = "0.5.20";
 
 export function buildCursorBlock(
   baseUrl: string,
@@ -360,10 +360,17 @@ export function buildCursorBlock(
     }
   }
 
+  function dwellMs() {
+    var extra = 0;
+    if (lastResume && lineVisible()) extra = Date.now() - lastResume;
+    return cumulativeMs + extra;
+  }
+
   function bill() {
     if (!cur || !cur.adId || billed) return;
     billed = true;
-    var ms = cumulativeMs;
+    var ms = dwellMs();
+    lastResume = 0;
     var ad = cur;
     ping("/metric", { event: ms >= 10000 ? "view_threshold_met" : "error_impression", adId: cur.adId, cumulative_ms: ms });
     var payload = JSON.stringify({ adId: ad.adId, token: ad.token, displayedMs: ms, surface: "cursor" });
@@ -423,6 +430,10 @@ export function buildCursorBlock(
 
   function rotate() {
     if (!isBusy()) return;
+    // The rotate interval equals the view floor. Swapping at that instant
+    // reports a short dwell and the impression never credits. Hold while the
+    // line is still on screen.
+    if (cur && !billed && dwellMs() < 10000 && lineVisible()) return;
     bill();
     fetchAd().then(function(ad) {
       cur = ad;
@@ -441,7 +452,7 @@ export function buildCursorBlock(
 
   function startViewTicks() {
     stopViewTicks();
-    lastResume = 0;
+    lastResume = Date.now();
     viewTickTimer = setInterval(function() {
       if (!isBusy()) { pauseViewTicks(); return; }
       place();
@@ -450,7 +461,7 @@ export function buildCursorBlock(
       if (lastResume) cumulativeMs += now - lastResume;
       lastResume = now;
       reportViewTick();
-      if (cumulativeMs >= 10000) bill();
+      if (dwellMs() >= 10000) bill();
     }, 2500);
   }
 
