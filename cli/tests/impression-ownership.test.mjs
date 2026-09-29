@@ -110,7 +110,7 @@ try {
   assert.equal(impressions.length, 0, "billed before any real dwell time accrued");
 
   // Simulate 4s of real on-screen time (> MIN_DISPLAY_MS_BEFORE_BILL).
-  ageShownAt(4000);
+  ageShownAt(10000);
   const second = await render(session);
 
   // A third poll, still within the rotation window, must not double-bill.
@@ -129,7 +129,7 @@ try {
       JSON.stringify(impressions.map((i) => i.ad_id)),
   );
   assert.equal(impressions[0].ad_id, "ad-1", "billed an ad that was never displayed");
-  assert.ok(impressions[0].displayed_ms >= 4000, "billed without real dwell time");
+  assert.ok(impressions[0].displayed_ms >= 10000, "billed without real dwell time");
   assert.ok(first.includes("body #1"), "displayed an ad other than the billed one");
 
   // ── Case B: the prefetched ad goes stale before anything renders ─────────
@@ -166,7 +166,7 @@ try {
     "billed the stale prefetch, or billed the new ad before any dwell time",
   );
 
-  ageShownAt(4000);
+  ageShownAt(10000);
   await render(session);
   await runHook("turn-end", "claude-code", session);
 

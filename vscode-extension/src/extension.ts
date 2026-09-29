@@ -336,11 +336,14 @@ function reassertSurfaces(context: vscode.ExtensionContext): void {
         overlayAhead = false;
         void context.globalState.update(BUILD_ACK, CURSOR_BUILD);
         earningsBar?.setStale(false);
+      } else if (overlayAhead || (seen !== "" && seen !== CURSOR_BUILD)) {
+        // A live check-in with a different id, or a script we just wrote that
+        // this window has not loaded. An old ack must not keep the warning up
+        // after the running overlay is already current — hello arrives after
+        // startup, and this runs again from onHello.
+        earningsBar?.setStale(true);
       } else {
-        const ack = context.globalState.get<string>(BUILD_ACK);
-        earningsBar?.setStale(
-          overlayAhead || Boolean(seen && seen !== CURSOR_BUILD) || Boolean(ack && ack !== CURSOR_BUILD),
-        );
+        earningsBar?.setStale(false);
       }
     }
   } else {
@@ -445,6 +448,7 @@ async function startDisplay(context: vscode.ExtensionContext): Promise<void> {
   }
 
   loopback = new Loopback("vscode", () => category, () => policiesOk(context));
+  loopback.onHello(() => reassertSurfaces(context));
   await loopback.start();
 
   earningsBar?.setAccess(true, cfg.wallet);

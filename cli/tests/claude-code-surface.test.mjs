@@ -306,7 +306,7 @@ test("staged bundles fetch an ad and bill exactly one impression", async () => {
     // real sleep, mirroring cli/tests/impression-ownership.test.mjs.
     const cachePath = join(home, ".latent-protocol", "statusline_cache.json");
     const cached = JSON.parse(readFileSync(cachePath, "utf8"));
-    cached.shown_at_ms -= 4000;
+    cached.shown_at_ms -= 10000;
     writeFileSync(cachePath, JSON.stringify(cached));
 
     const b = await runNode(binSL, [], session);
@@ -317,7 +317,7 @@ test("staged bundles fetch an ad and bill exactly one impression", async () => {
       1,
       `one displayed ad must bill once, got ${impressions.length}`,
     );
-    assert.ok(impressions[0].displayed_ms >= 4000, "billed without real dwell time");
+    assert.ok(impressions[0].displayed_ms >= 10000, "billed without real dwell time");
   } finally {
     server.close();
   }

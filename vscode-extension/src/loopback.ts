@@ -119,6 +119,7 @@ export class Loopback {
   private events: FunnelEvent[] = [];
   /** Build id last reported by the workbench overlay in this window. */
   private reportedBuild = "";
+  private helloListener: ((build: string) => void) | null = null;
 
   constructor(
     private readonly agent: string,
@@ -139,6 +140,11 @@ export class Loopback {
   /** Build id from the overlay script that is actually running. Empty until it checks in. */
   helloBuild(): string {
     return this.reportedBuild;
+  }
+
+  /** Fires when the running overlay checks in, including after startup. */
+  onHello(fn: (build: string) => void): void {
+    this.helloListener = fn;
   }
 
   async start(): Promise<void> {
@@ -198,6 +204,7 @@ export class Loopback {
 
       if (route === "hello" && req.method === "GET") {
         this.reportedBuild = (url.searchParams.get("build") || "").slice(0, 64);
+        this.helloListener?.(this.reportedBuild);
         return send(res, 200, { ok: true });
       }
 
