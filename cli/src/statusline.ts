@@ -23,11 +23,9 @@ import { AD_LIMITS, sanitizeAdText } from "./sanitize.js";
 // 10s rotation = CodeBacks parity (ADS_STATUSLINE_ROTATE still overrides).
 const DEFAULT_ROTATE_SECONDS = 10;
 
-// Don't bother billing before this much real on-screen time has accrued —
-// the server's own MIN_VIEW_MS is authoritative (this is a client-side
-// convenience threshold, not the enforcement point); mirrors the default so
-// most impressions clear the server gate on the first attempt.
-const MIN_DISPLAY_MS_BEFORE_BILL = 3000;
+// Match the server view floor (MIN_VIEW_MS). A shorter client threshold posts
+// impressions the server records as below_view_threshold and never credits.
+const MIN_DISPLAY_MS_BEFORE_BILL = 10_000;
 // Same cap `cli/src/adcache.ts` uses for the turn-hook surface — a stale
 // cache from a much earlier, since-abandoned session shouldn't report hours
 // of "dwell time".
@@ -246,14 +244,27 @@ export async function render(session: Record<string, unknown> = {}): Promise<str
     return line;
   }
 
+  // Rotation is the same length as the view floor, and Claude polls on that
+  // same interval, so the measured dwell at the first stale poll lands a few
+  // hundred milliseconds short. Hold the creative until it actually clears
+  // the floor instead of posting a reject and swapping.
+  const sameSession = (cache.session_id ?? sessionId) === sessionId;
+  if (cache.ad && !cache.billed && cache.shown_at_ms !== undefined && sameSession) {
+    noteSeen(cache, Date.now());
+    if (elapsedMs(cache) < MIN_DISPLAY_MS_BEFORE_BILL) {
+      const held = formatStatusline(cache.ad);
+      if (held) {
+        saveCache({ ...cache, fetched_at: now });
+        return held;
+      }
+    }
+  }
+
   // The cache is stale (rotation window elapsed) or foreign (session
   // changed). If it holds an ad THIS status line actually displayed
-  // (shown_at_ms set) but never crossed the billing threshold above, flush
-  // it now with whatever real elapsed time it actually got — the server's
-  // own MIN_VIEW_MS is authoritative, this just reports the truth instead of
-  // silently dropping a briefly-shown ad. An ad the turn hook merely
-  // prefetched and this status line never got to render (shown_at_ms still
-  // unset) must never be billed — nobody saw it.
+  // (shown_at_ms set) and the view floor has cleared, flush it. An ad the
+  // turn hook merely prefetched and this status line never rendered
+  // (shown_at_ms still unset) must never be billed — nobody saw it.
   if (cache.ad && !cache.billed && cache.shown_at_ms !== undefined) {
     noteSeen(cache, Date.now());
     const staleMs = elapsedMs(cache);

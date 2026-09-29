@@ -79,7 +79,7 @@ test("status line sends a category slug, not the raw prompt; impression has even
     assert.equal(impressions.length, 0, "billed before any real dwell time accrued");
     const cachePath = join(home, ".latent-protocol", "statusline_cache.json");
     let cache = JSON.parse(readFileSync(cachePath, "utf8"));
-    cache.shown_at_ms -= 4000;
+    cache.shown_at_ms -= 10000;
     writeFileSync(cachePath, JSON.stringify(cache));
     await render({ session_id: "s1" });
 
