@@ -26,19 +26,6 @@ function init(home) {
   });
 }
 
-test("init removes an older release's MiMo plugin and installs nothing", () => {
-  const home = mkdtempSync(join(tmpdir(), "latent-mimo-"));
-  const plugins = join(home, ".config", "mimocode", "plugins");
-  mkdirSync(plugins, { recursive: true });
-  const ours = join(plugins, "latent-protocol.ts");
-  writeFileSync(ours, "// LATENT_PROTOCOL_MIMO_PLUGIN\nexport default async () => ({});\n");
-
-  init(home);
-  assert.ok(!existsSync(ours), "legacy MiMo plugin survived init");
-  init(home);
-  assert.ok(!existsSync(ours), "init re-installed the MiMo plugin");
-});
-
 test("a same-named plugin without our marker is left alone", () => {
   const home = mkdtempSync(join(tmpdir(), "latent-mimo-foreign-"));
   const plugins = join(home, ".config", "mimocode", "plugins");

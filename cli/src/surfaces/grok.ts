@@ -17,9 +17,8 @@ import { AGENT_GROK, binDir } from "../config.js";
 import { distPath } from "../pkg.js";
 import {
   BACKUP_SUFFIX,
+  discardBackup,
   ensureBackup,
-  hasBackup,
-  restoreFromBackup,
 } from "./json-settings.js";
 import { findTable, parseTableValues, removeTable, upsertTable } from "./toml-table.js";
 
@@ -142,12 +141,8 @@ export function installGrok(opts: { refreshInterval?: number } = {}): string {
 export function uninstallGrok(): string {
   const cfgPath = grokConfigPath();
 
-  if (hasBackup(cfgPath)) {
-    const r = restoreFromBackup(cfgPath);
-    if (r.restored) {
-      return `✅ Restored ${cfgPath} from the pristine backup.`;
-    }
-  }
+  // Edit out only our table; restoring the pristine copy would undo later edits.
+  discardBackup(cfgPath);
 
   const src = readConfig(cfgPath);
   if (src == null) {

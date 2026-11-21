@@ -94,14 +94,17 @@ test("install refuses to overwrite a user-owned status line", async () => {
   assert.equal(readFileSync(p, "utf8"), before);
 });
 
-test("uninstall restores the pristine backup", async () => {
+test("uninstall strips our table and keeps edits made after install", async () => {
   const { home, mod } = await freshHome();
-  const before = cfgOf(home);
   mod.installGrok();
-  assert.notEqual(cfgOf(home), before);
+  const p = join(home, ".grok", "config.toml");
+  writeFileSync(p, readFileSync(p, "utf8") + "\n[user.later]\nx = 1\n");
   const msg = mod.uninstallGrok();
-  assert.match(msg, /Restored/);
-  assert.equal(cfgOf(home), before);
+  assert.match(msg, /Removed Latent/);
+  const raw = cfgOf(home);
+  assert.ok(!raw.includes("[ui.status_line]"), raw);
+  assert.match(raw, /\[user\.later\]/);
+  assert.ok(!existsSync(p + ".latent-protocol.bak"));
 });
 
 test("uninstall without backup strips only our table", async () => {

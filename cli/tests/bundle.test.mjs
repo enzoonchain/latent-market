@@ -48,102 +48,34 @@ test("artifacts have exactly one shebang, on line 1", () => {
   }
 });
 
-test("the bundled CLI runs", () => {
+test("the bundled CLI runs and says it is retired", () => {
   const out = execFileSync(process.execPath, [dist("index.js"), "help"], { encoding: "utf8" });
-  assert.match(out, /latent-protocol/);
-  assert.match(out, /init/);
+  assert.match(out, /latent-protocol is retired/);
+  assert.match(out, /uninstall/);
 });
 
-test("the bundled CLI binds --wallet without hitting the network", () => {
+test("init / prelaunch / activate patch nothing — they point at LatentCode", () => {
   const home = mkdtempSync(join(tmpdir(), "latent-bundle-"));
-  const wallet = "0x7331003C29a8Db67E141dD39964B205598b60bcf";
-  const out = execFileSync(
-    process.execPath,
-    [dist("index.js"), "prelaunch", "--wallet", wallet, "--skip-register", "--yes"],
-    { encoding: "utf8", env: { ...process.env, HOME: home } },
-  );
-  assert.match(out, /0x7331003C29a8Db67E141dD39964B205598b60bcf/, "no wallet address in prelaunch output");
-});
-
-test("the bundled CLI's `init` stages the runtime — asset paths survive bundling", () => {
-  // Regression: `new URL("../claude/…", import.meta.url)` resolved from
-  // dist/surfaces/x.js but pointed one level too high once x.js was inlined
-  // into dist/index.js, so a real `npx …/init` reported "runtime bundle
-  // missing" and patched nothing.
-  const home = mkdtempSync(join(tmpdir(), "latent-init-"));
-  mkdirSync(join(home, ".claude"), { recursive: true });
-
-  const out = execFileSync(
-    process.execPath,
-    [dist("index.js"), "init", "--yes", "--wallet", "0x7331003C29a8Db67E141dD39964B205598b60bcf"],
-    { encoding: "utf8", env: { ...process.env, HOME: home } },
-  );
-  assert.doesNotMatch(out, /runtime bundle missing/, out);
-
-  for (const f of ["statusline.mjs", "hook.mjs"]) {
-    assert.ok(existsSync(join(home, ".latent-protocol", "bin", f)), `${f} not staged`);
-  }
-  const settings = readFileSync(join(home, ".claude", "settings.json"), "utf8");
-  assert.ok(!/\bnpx\b/.test(settings), "npx in settings.json");
-  assert.match(settings, /hook\.mjs\\" turn-start --agent claude-code/);
-});
-
-test("`init` on closed stdin fails loudly instead of exiting 0 with no wallet", () => {
-  const home = mkdtempSync(join(tmpdir(), "latent-eof-"));
-  mkdirSync(join(home, ".claude"), { recursive: true });
-  writeFileSync(join(home, ".claude", "settings.json"), "{}");
-
-  let status = 0;
-  let output = "";
-  try {
-    output = execFileSync(process.execPath, [dist("index.js"), "init"], {
+  for (const cmd of ["init", "prelaunch", "activate"]) {
+    const r = spawnSync(process.execPath, [dist("index.js"), cmd, "--yes", "--wallet", "0x7331003C29a8Db67E141dD39964B205598b60bcf"], {
       encoding: "utf8",
-      env: { ...process.env, HOME: home },
-      stdio: ["pipe", "pipe", "pipe"],
-      input: "",
+      env: { ...process.env, HOME: home, USERPROFILE: home },
     });
-  } catch (err) {
-    status = err.status;
-    output = `${err.stdout ?? ""}${err.stderr ?? ""}`;
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /retired/);
+    assert.match(r.stdout, /latentcode/);
   }
-
-  assert.notEqual(status, 0, `expected a non-zero exit, got ${status}:\n${output}`);
-  assert.match(output, /stdin closed before answering/);
-  assert.equal(existsSync(join(home, ".latent-protocol", "config.json")), false);
+  assert.ok(!existsSync(join(home, ".claude", "settings.json")), "init must not patch Claude Code");
+  assert.ok(!existsSync(join(home, ".latent-protocol", "bin")), "init must not stage a runtime");
 });
 
-test("the bundled CLI rejects the removed --generate flag instead of minting a key", () => {
+test("an installed hook / npx statusLine is a silent no-op", () => {
   const home = mkdtempSync(join(tmpdir(), "latent-bundle-"));
-  const res = spawnSync(process.execPath, [dist("index.js"), "init", "--generate", "--yes"], {
-    encoding: "utf8",
-    env: { ...process.env, HOME: home },
-  });
-  assert.notEqual(res.status, 0);
-  assert.match(res.stderr, /--generate was removed/);
-  assert.doesNotMatch(res.stdout + res.stderr, /Private key/i);
-});
-
-test("piped answers all reach init — none dropped between prompts", () => {
-  // Regression: rl.question() dropped a line that arrived before its prompt,
-  // so `printf 'y\n3\n0x…\n' | init` answered the first question and hung.
-  const home = mkdtempSync(join(tmpdir(), "latent-pipe-"));
-  mkdirSync(join(home, ".latent-protocol"), { recursive: true });
-  writeFileSync(
-    join(home, ".latent-protocol", "config.json"),
-    JSON.stringify({ wallet: "0x1111111111111111111111111111111111111111" }),
-  );
-  const wallet = "0x7331003C29a8Db67E141dD39964B205598b60bcf";
-  const res = spawnSync(
-    process.execPath,
-    [dist("index.js"), "prelaunch", "--skip-register"],
-    {
-      encoding: "utf8",
-      input: `y\n3\n${wallet}\n`,
-      env: { ...process.env, HOME: home, LATENT_NO_BROWSER: "1" },
-      timeout: 20000,
-    },
-  );
-  assert.equal(res.status, 0, res.stderr);
-  const cfg = JSON.parse(readFileSync(join(home, ".latent-protocol", "config.json"), "utf8"));
-  assert.equal(cfg.wallet, wallet);
+  for (const args of [["hook", "turn-start", "--agent", "claude-code"], ["statusline"]]) {
+    const r = spawnSync(process.execPath, [dist("index.js"), ...args], {
+      encoding: "utf8", input: "{}", env: { ...process.env, HOME: home, USERPROFILE: home },
+    });
+    assert.equal(r.status, 0);
+    assert.equal(r.stdout, "");
+  }
 });

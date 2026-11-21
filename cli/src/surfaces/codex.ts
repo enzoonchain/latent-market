@@ -18,9 +18,8 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { binDir } from "../config.js";
 import {
-  hasBackup,
+  discardBackup,
   readSettings,
-  restoreFromBackup,
   setPath,
   writeSettingsFile,
 } from "./json-settings.js";
@@ -83,13 +82,8 @@ function stripOurs(arr: unknown[]): unknown[] {
 export function uninstallCodexAgent(a: CodexAgentDef): string {
   const path = hooksPath(a);
 
-  if (hasBackup(path)) {
-    const r = restoreFromBackup(path);
-    if (r.restored) {
-      cleanStagedHookIfUnused();
-      return `✅ ${a.name}: restored ${path} from the pristine backup.`;
-    }
-  }
+  // Edit out only our hooks; restoring the pristine copy would undo later edits.
+  discardBackup(path);
 
   if (!existsSync(path)) return `ℹ️  ${a.name}: no hooks.json; nothing to remove.`;
   const { raw, data, unparseable } = readSettings(path);
