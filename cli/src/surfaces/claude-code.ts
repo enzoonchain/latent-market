@@ -6,9 +6,8 @@ import { detectAgents } from "../detect.js";
 import {
   describeParseErrors,
   ensureBackup,
-  hasBackup,
+  discardBackup,
   readSettings,
-  restoreFromBackup,
   setPath,
   writeSettingsFile,
 } from "./json-settings.js";
@@ -228,14 +227,9 @@ export function uninstallClaudeCode(): string {
   const { paths } = detectAgents();
   const settingsPath = paths.claudeSettings;
 
-  // Prefer a byte-exact revert from the pristine backup init wrote.
-  if (hasBackup(settingsPath)) {
-    const r = restoreFromBackup(settingsPath);
-    if (r.restored) {
-      cleanRuntimeDir();
-      return `✅ Restored ${settingsPath} from the pristine backup; removed staged runtime.`;
-    }
-  }
+  // Edit out only our entries; never restore the whole pristine backup —
+  // that would undo every settings change made since install.
+  discardBackup(settingsPath);
 
   if (!existsSync(settingsPath)) {
     return "ℹ️  No Claude Code settings.json found; nothing to remove.";

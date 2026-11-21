@@ -258,19 +258,21 @@ test("uninstall reverts to the pristine pre-install settings byte-exact", async 
   }
 });
 
-test("uninstall deletes settings.json when install created it", async () => {
+test("uninstall keeps settings.json and changes made after install", async () => {
   const { server, port } = await startAdServer();
   try {
     const { home, mod } = await freshHome(port);
-    // freshHome does not create settings.json.
-    assert.ok(!existsSync(join(home, ".claude", "settings.json")));
+    const p = join(home, ".claude", "settings.json");
+    assert.ok(!existsSync(p));
     mod.installClaudeCode();
-    assert.ok(existsSync(join(home, ".claude", "settings.json")));
+    const after = JSON.parse(readFileSync(p, "utf8"));
+    after.model = "opus"; // a user change made after install
+    writeFileSync(p, JSON.stringify(after, null, 2));
     mod.uninstallClaudeCode();
-    assert.ok(
-      !existsSync(join(home, ".claude", "settings.json")),
-      "settings.json survived uninstall though install created it",
-    );
+    const left = JSON.parse(readFileSync(p, "utf8"));
+    assert.equal(left.model, "opus", "uninstall dropped a later user change");
+    assert.ok(!("statusLine" in left) && !("hooks" in left), JSON.stringify(left));
+    assert.ok(!existsSync(p + ".latent-protocol.bak"), "stale pristine backup left behind");
   } finally {
     server.close();
   }
