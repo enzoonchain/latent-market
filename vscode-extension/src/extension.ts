@@ -20,7 +20,7 @@ import { MIN_VIEW_MS, ViewabilityTracker, type MetricEvent } from "./metrics.js"
 import { EarningsStatusBar } from "./statusbar.js";
 import { fetchEarnings, fetchWalletStats, statCells, type StatsPeriod } from "./earnings.js";
 import { checkBundleConflict, runAllChecks } from "./conflict.js";
-import { installClaudeCliHook, removeClaudeCliHook, statuslineRuntimePath } from "./claude-cli.js";
+import { removeClaudeCliHook } from "./claude-cli.js";
 import { findWorkbenchHtml, isWorkbenchPatched, patchWorkbench, restoreWorkbench, syncWorkbenchChecksum, workbenchChecksumMatches, WB_BLOCK_FILE } from "./workbench.js";
 import { POLICY_KEY, POLICY_VERSION, isPolicyAccepted } from "./policy.js";
 import { bindSidebar, openManagementPanel, postPanelState, unbindSidebar, type AgentKind, type PanelMessage, type PanelState } from "./panel.js";
@@ -125,7 +125,6 @@ async function collectPanelState(context: vscode.ExtensionContext): Promise<Pane
       balanceText = "Latent Menu";
     } else balanceText = "Latent —";
   }
-  const cli = runAllChecks().find((c) => c.target === "claude-cli");
   const health = shouldServe();
   const events = loopback?.recentEvents().slice(-5).map((ev) => ev.event).join(", ") || "none";
   const agents = agentRows();
@@ -136,8 +135,6 @@ async function collectPanelState(context: vscode.ExtensionContext): Promise<Pane
     wallet: cfg.wallet,
     balanceText,
     agents,
-    cliRuntime: existsSync(statuslineRuntimePath()),
-    cliInstalled: !!cli && cli.message.includes("Latent owns"),
     sponsorSurface: sponsorSurface(),
     figures,
     stats,
@@ -501,8 +498,6 @@ async function onPanelMessage(context: vscode.ExtensionContext, msg: PanelMessag
     void vscode.window.showInformationMessage("Latent: reload the window to apply the injection.");
   } else if (msg.type === "restore") {
     restoreAll(false, msg.agent);
-  } else if (msg.type === "cli") {
-    await vscode.commands.executeCommand(msg.install ? "latent.installCliHook" : "latent.removeCliHook");
   } else if (msg.type === "openDashboard") {
     void vscode.env.openExternal(vscode.Uri.parse("https://latentprotocol.xyz/dashboard"));
   } else if (msg.type === "reload") {
@@ -519,6 +514,13 @@ async function onPanelMessage(context: vscode.ExtensionContext, msg: PanelMessag
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  // The terminal Claude Code status line is a retired surface: drop the one
+  // this extension installed (only ours, proven by its ownership marker).
+  try {
+    removeClaudeCliHook();
+  } catch {
+    // never block activation
+  }
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("latentSponsor", new SponsorViewProvider(context)),
     vscode.commands.registerCommand("latent.enable", async () => {
@@ -571,27 +573,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const msgs = conflicts.map((c) => c.message).join("\n");
         void vscode.window.showWarningMessage(`Latent: ${conflicts.length} conflict(s):\n${msgs}`);
       }
-    }),
-    vscode.commands.registerCommand("latent.installCliHook", async () => {
-      let result = installClaudeCliHook();
-      if (result === "conflict") {
-        const owner = runAllChecks().find((c) => c.target === "claude-cli" && c.hasConflict);
-        const pick = await vscode.window.showWarningMessage(
-          owner?.message ?? "Claude Code already has a statusLine. Replace it with Latent? (It is restored when you remove the Latent hook.)",
-          { modal: true },
-          "Replace",
-        );
-        if (pick !== "Replace") return;
-        result = installClaudeCliHook(true);
-      }
-      const msgs = {
-        "installed": "Latent: Claude CLI hook installed.",
-        "already-installed": "Latent: Claude CLI hook already active.",
-        "conflict": "Latent: Claude Code statusLine left unchanged.",
-        "needs-cli": "Latent: run `npx latent-protocol init` first — it installs the status-line runtime this hook uses.",
-        "error": "Latent: could not update ~/.claude/settings.json (unparseable or unwritable — left untouched).",
-      };
-      void vscode.window.showInformationMessage(msgs[result]);
     }),
     vscode.commands.registerCommand("latent.removeCliHook", () => {
       const result = removeClaudeCliHook();

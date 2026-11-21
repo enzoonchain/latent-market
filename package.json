@@ -1,8 +1,8 @@
 {
   "name": "latent-protocol",
   "version": "0.1.2",
-  "private": false,
-  "description": "Latent Protocol — one-line installer for Claude Code + Hermes sponsored ads",
+  "private": true,
+  "description": "Latent Protocol (retired CLI) \u2014 use LatentCode, latent-opencode or the VS Code extension",
   "type": "module",
   "bin": {
     "latent": "./cli/dist/index.js",
@@ -16,9 +16,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "prepare": "npm --prefix cli install --include=dev && bash scripts/sync-openclaw-template.sh && npm --prefix cli run build",
-    "build": "bash scripts/sync-openclaw-template.sh && npm --prefix cli run build",
-    "sync:openclaw": "bash scripts/sync-openclaw-template.sh"
+    "prepare": "npm --prefix cli install --include=dev && npm --prefix cli run build",
+    "build": "npm --prefix cli run build"
   },
   "dependencies": {
     "viem": "^2.21.0"

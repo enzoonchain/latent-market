@@ -6,27 +6,6 @@ on:
     branches: [main]
 
 jobs:
-  python:
-    name: Python client SDK
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install
-        run: pip install -e ".[dev]"
-
-      - name: Tests
-        run: pytest -q
-
-      - name: Lint (ruff) — non-blocking
-        continue-on-error: true
-        run: ruff check .
-
   cli:
     name: CLI + adapters (TypeScript)
     runs-on: ubuntu-latest
@@ -86,40 +65,6 @@ jobs:
             exit 1
           fi
           echo "OK — no bare 'npx latent' invocations"
-
-  openclaw-plugin:
-    name: OpenClaw plugin
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install
-        run: npm install --include=dev --prefix openclaw-plugin
-
-      - name: Typecheck
-        run: npm run typecheck --prefix openclaw-plugin
-
-      - name: Tests
-        run: npm test --prefix openclaw-plugin
-
-      - name: Build
-        run: npm run build --prefix openclaw-plugin
-
-      # cli/templates/openclaw-plugin/dist is a vendored copy of the plugin
-      # build, shipped inside the npm package so `npx latent-protocol init`
-      # can install it without the monorepo. If a PR edits the plugin source
-      # without re-running scripts/sync-openclaw-template.sh, users get stale
-      # code — so fail the build rather than shipping the drift.
-      - name: Template is in sync with plugin source
-        run: |
-          if ! diff -r openclaw-plugin/dist cli/templates/openclaw-plugin/dist; then
-            echo "::error::cli/templates/openclaw-plugin/dist is stale — run: bash scripts/sync-openclaw-template.sh"
-            exit 1
-          fi
 
   vscode-extension:
     name: VS Code / Cursor extension

@@ -93,23 +93,6 @@ test("uninstall leaves an unparseable hooks.json alone", async () => {
   assert.equal(readFileSync(p, "utf8"), "{ broken");
 });
 
-test("`init` writes no Codex hooks and strips an older release's", () => {
-  const home = mkdtempSync(join(tmpdir(), "latent-codex-init-"));
-  mkdirSync(join(home, ".codex"), { recursive: true });
-  const p = join(home, ".codex", "hooks.json");
-  writeFileSync(p, JSON.stringify(legacyHooks(home)));
-
-  const env = { ...process.env, HOME: home };
-  delete env.CODEX_HOME;
-  execFileSync(
-    process.execPath,
-    [dist("index.js"), "init", "--yes", "--wallet", "0x7331003C29a8Db67E141dD39964B205598b60bcf"],
-    { encoding: "utf8", env },
-  );
-  assert.ok(!readFileSync(p, "utf8").includes("latent"), "legacy Codex hooks survived init");
-  assert.ok(!existsSync(join(home, ".latent-protocol", "bin", "codex-hook.mjs")));
-});
-
 test("the hook runtime ignores --agent codex: no output, no ad request", async () => {
   let requests = 0;
   const server = createServer((req, res) => {

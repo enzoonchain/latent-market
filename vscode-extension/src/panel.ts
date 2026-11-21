@@ -21,8 +21,6 @@ export interface PanelState {
   wallet: string;
   balanceText: string;
   agents: AgentRow[];
-  cliInstalled: boolean;
-  cliRuntime: boolean;
   diagnose: string;
   sponsorSurface: "statusbar" | "overlay";
   figures: {
@@ -45,7 +43,6 @@ export type PanelMessage =
   | { type: "setEnabled"; enabled: boolean }
   | { type: "inject"; agent: AgentKind }
   | { type: "restore"; agent: AgentKind }
-  | { type: "cli"; install: boolean }
   | { type: "refresh" }
   | { type: "reload" }
   | { type: "openDashboard" }
@@ -282,7 +279,6 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     <h2>Agents</h2>
     <div class="row"><div><div class="name">Claude Code</div><div class="meta">In the agent spinner</div></div><div class="right" id="claude"></div></div>
     <div class="row"><div><div class="name">Codex</div><div class="meta">In the agent spinner</div></div><div class="right" id="codex"></div></div>
-    <div class="row"><div><div class="name">Claude CLI</div><div class="meta">Terminal status line</div></div><div class="right" id="cli"></div></div>
   </section>
 
   <details>
@@ -329,11 +325,6 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     const codex = (s.agents || []).find((a) => a.agent === "codex");
     $("claude").innerHTML = agentSlot(claude);
     $("codex").innerHTML = agentSlot(codex);
-    $("cli").innerHTML = !s.cliRuntime
-      ? '<span class="pill">Needs init</span>'
-      : (s.cliInstalled
-        ? '<span class="pill ok">On</span><button class="ghost" type="button" data-act="cli-off">Remove</button>'
-        : '<span class="pill">Off</span><button class="primary" type="button" data-act="cli-on" style="width:auto">Install</button>');
     $("diagnose").textContent = s.diagnose || "";
     document.querySelectorAll(".busy").forEach((n) => n.classList.remove("busy"));
   }
@@ -389,8 +380,6 @@ function panelHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     el.classList.add("busy");
     const act = el.getAttribute("data-act");
     if (act === "inject" || act === "restore") vscode.postMessage({ type: act, agent: el.getAttribute("data-agent") });
-    else if (act === "cli-on") vscode.postMessage({ type: "cli", install: true });
-    else if (act === "cli-off") vscode.postMessage({ type: "cli", install: false });
     else if (act === "surface") vscode.postMessage({ type: "surface", surface: el.getAttribute("data-surface") });
   });
   window.addEventListener("message", (e) => { if (e.data && e.data.type === "state") render(e.data.state); });
